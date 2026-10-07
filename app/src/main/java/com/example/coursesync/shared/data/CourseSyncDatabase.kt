@@ -31,6 +31,7 @@ interface CourseSyncDao {
     @Query("DELETE FROM drafts WHERE id = :id") suspend fun deleteDraft(id: String)
     @Query("SELECT * FROM registrations WHERE draftId = :draftId LIMIT 1") suspend fun registrationForDraft(draftId: String): Registration?
     @Query("SELECT * FROM registrations WHERE studentId = :studentId") suspend fun registrations(studentId: String): List<Registration>
+    @Query("SELECT * FROM registration_selections WHERE registrationId = :registrationId") suspend fun registrationSelections(registrationId: String): List<RegistrationSelection>
     @Query("SELECT groupId, COUNT(*) AS seats FROM registration_selections GROUP BY groupId") suspend fun seatCounts(): List<SeatCount>
     @Query("SELECT * FROM staff_cases") suspend fun cases(): List<StaffCase>
     @Query("SELECT * FROM staff_cases WHERE id = :id") suspend fun caseById(id: String): StaffCase?

@@ -22,6 +22,7 @@ class CourseSyncRepository(private val database: CourseSyncDatabase) {
     suspend fun reopenDraft(draftId: String): Pair<Draft, List<DraftSelection>>? =
         dao.draft(draftId)?.let { it to dao.selections(draftId) }
     suspend fun registrations(studentId: String) = dao.registrations(studentId)
+    suspend fun registrationSelections(registrationId: String) = dao.registrationSelections(registrationId)
     suspend fun cases() = dao.cases()
     suspend fun notes(caseId: String) = dao.notes(caseId)
     suspend fun caseHistory(caseId: String) = dao.history(caseId)
@@ -58,6 +59,14 @@ class CourseSyncRepository(private val database: CourseSyncDatabase) {
     suspend fun changeSelection(draftId: String, courseId: String, newGroupId: String) = database.withTransaction {
         require(dao.selections(draftId).any { it.courseId == courseId })
         addSelectionInternal(draftId, courseId, newGroupId)
+    }
+
+    suspend fun replaceSelection(draftId: String, oldCourseId: String, newCourseId: String, newGroupId: String) = database.withTransaction {
+        require(dao.selections(draftId).any { it.courseId == oldCourseId })
+        require(dao.selections(draftId).none { it.courseId == newCourseId && it.courseId != oldCourseId })
+        require(dao.registrationForDraft(draftId) == null) { "Confirmed draft cannot change" }
+        dao.removeSelection(draftId, oldCourseId)
+        addSelectionInternal(draftId, newCourseId, newGroupId)
     }
 
     suspend fun removeSelection(draftId: String, courseId: String) = database.withTransaction {

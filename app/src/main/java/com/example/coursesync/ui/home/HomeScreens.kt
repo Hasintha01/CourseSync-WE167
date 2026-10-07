@@ -16,12 +16,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun RoleSelectionScreen(onStudent: () -> Unit, onStaff: () -> Unit, modifier: Modifier = Modifier) {
+fun RoleSelectionScreen(onStudent: () -> Unit, onStaff: () -> Unit, onReplayOnboarding: () -> Unit, modifier: Modifier = Modifier) {
     ScreenColumn(modifier) {
         Text("Welcome to CourseSync", style = MaterialTheme.typography.headlineMedium)
         Text("Choose a workspace to continue.")
         Button(onClick = onStudent, modifier = Modifier.fillMaxWidth()) { Text("Student") }
         OutlinedButton(onClick = onStaff, modifier = Modifier.fillMaxWidth()) { Text("Staff") }
+        OutlinedButton(onClick = onReplayOnboarding, modifier = Modifier.fillMaxWidth()) { Text("Replay onboarding") }
     }
 }
 
