@@ -1,0 +1,39 @@
+# CourseSync shared contract (IT3060 WE_167)
+
+The existing role selector and `CourseSyncApp` routes remain the navigation entry points. This foundation provides Room data and operations; member screens are still placeholders. No login or remote service is used. Demo identity is `S1` (Asha Perera).
+
+## Ownership and routes
+
+| Member | Package | Routes | Work |
+| --- | --- | --- | --- |
+| 1 | `feature.review` | `Review` | Review, correction, confirmation, success |
+| 2 | `feature.courses` | `Courses`, `Drafts` | Course selection and saved drafts |
+| 3 | `feature.timetable` | `Timetable` | Timetable and clash resolution |
+| 4 | `feature.staff` | `Staff` | Cases, notes, status, history |
+
+`Roles` and `StudentHome` are shared navigation routes. Keep existing screen entry points; add detailed member screens inside the listed packages. `shared.model`, `shared.data`, and `shared.validation` are jointly owned.
+
+## Sample data and repeatable scenarios
+
+`SampleData` is the single documented seed source. Room inserts it only in the database creation callback. It never overwrites edits at startup. Student `S1` has no completed courses. Course `CS201` requires `CS101`. Groups use day 1–7 (Monday–Sunday) and minutes after midnight. `CS101-A` is Monday 09:00–10:00; `MA101-A` is Monday 10:00–11:00; `MA101-B` is Monday 09:30–10:30; `UX101-A` has zero seats. Other groups are Tuesday through Friday. There is one open case with one note and one initial history event. One confirmed `REG-1` for `D-SEEDED` holds `NW101-A`, demonstrating a persisted registration and seat count.
+
+| Draft | Selections | Expected result |
+| --- | --- | --- |
+| `D-VALID` | `CS101-A`, `MA101-A` | Valid; adjacent classes |
+| `D-OVERLAP` | `CS101-A`, `MA101-B` | Time overlap |
+| `D-PREREQ` | `CS201-A` | Missing `CS101` prerequisite |
+| `D-FULL` | `UX101-A` | Full group |
+| `D-EMPTY` | None | Empty selection |
+| `D-SEEDED` | `NW101-A` | Already confirmed as `REG-1` |
+
+## Repository contract
+
+Create `CourseSyncRepository(CourseSyncDatabase.get(context))` off the UI thread and call its suspend methods from a coroutine. Reads: `students`, `courses`, `groups`, `drafts`, `reopenDraft`, `registrations`, `cases`, `notes`, `caseHistory`. Draft edits: `saveDraft`, `renameDraft`, `deleteDraft`, `addSelection`, `removeSelection`, `changeSelection`. Registration: `validateDraft`, `confirmRegistration`. Staff workflow: `addGuidanceNote`, `updateGuidanceNote`, `deleteGuidanceNote`, `updateCaseStatus`. Invalid IDs and edits to confirmed drafts throw `IllegalArgumentException`; keep UI input handling around those calls. Academic catalog and completed courses have no repository mutation methods.
+
+`confirmRegistration` returns `Confirmed`, `Invalid` with structured issues, or `AlreadyConfirmed`. It validates and writes the registration and frozen selection snapshot in one Room transaction. A unique `draftId` index is an additional duplicate guard. Confirmed drafts cannot be edited or deleted. Group capacity counts confirmed registration selections.
+
+## Validation
+
+`PlanValidator.validate` returns `ValidationResult` with `ValidationIssue(type, courseIds, groupIds)`. It checks empty selection, group-to-course consistency, completed prerequisites, capacity, and pairwise same-day time overlap. Intervals are half open: `[startMinute, endMinute)`, so 09:00–10:00 and 10:00–11:00 are adjacent and valid. Full groups satisfy occupied seats `>= capacity`. No academic data may be changed through the staff repository methods.
+
+Database version is 1. Future schema changes require a Room migration; destructive fallback is intentionally absent so saved data survives app restarts and schema upgrades must be handled explicitly.

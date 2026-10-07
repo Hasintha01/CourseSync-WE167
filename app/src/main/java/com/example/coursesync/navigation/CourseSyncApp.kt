@@ -15,7 +15,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.coursesync.feature.courses.StudentCoursesScreen
-import com.example.coursesync.feature.drafts.DraftsScreen
+import com.example.coursesync.feature.courses.DraftsScreen
 import com.example.coursesync.feature.review.RegistrationReviewScreen
 import com.example.coursesync.feature.staff.StaffWorkspaceScreen
 import com.example.coursesync.feature.timetable.WeeklyTimetableScreen
