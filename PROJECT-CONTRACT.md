@@ -6,12 +6,12 @@ The existing role selector and `CourseSyncApp` routes remain the navigation entr
 
 | Member | Package | Routes | Work |
 | --- | --- | --- | --- |
-| 1 | `feature.review` | `Review` | Review, correction, confirmation, success |
+| 1 | `feature.onboarding`, `feature.review` | `Onboarding`, `Review`, `Correction`, `Confirm`, `Success` | First-launch onboarding, review, correction, confirmation, success |
 | 2 | `feature.courses` | `Courses`, `Drafts` | Course selection and saved drafts |
 | 3 | `feature.timetable` | `Timetable` | Timetable and clash resolution |
 | 4 | `feature.staff` | `Staff` | Cases, notes, status, history |
 
-`Roles` and `StudentHome` are shared navigation routes. Keep existing screen entry points; add detailed member screens inside the listed packages. `shared.model`, `shared.data`, and `shared.validation` are jointly owned.
+`Roles` and `StudentHome` are shared navigation routes. `CourseSyncApp` retains both Student and Staff entry points. Onboarding completion and the active draft ID are stored in `coursesync_ui` SharedPreferences. Onboarding appears on first launch; Replay onboarding is available from role selection. Review opens the last active draft, defaulting to `D-VALID`, and its draft menu exposes all repeatable scenarios. `shared.model`, `shared.data`, and `shared.validation` are jointly owned.
 
 ## Sample data and repeatable scenarios
 
@@ -28,7 +28,7 @@ The existing role selector and `CourseSyncApp` routes remain the navigation entr
 
 ## Repository contract
 
-Create `CourseSyncRepository(CourseSyncDatabase.get(context))` off the UI thread and call its suspend methods from a coroutine. Reads: `students`, `courses`, `groups`, `drafts`, `reopenDraft`, `registrations`, `cases`, `notes`, `caseHistory`. Draft edits: `saveDraft`, `renameDraft`, `deleteDraft`, `addSelection`, `removeSelection`, `changeSelection`. Registration: `validateDraft`, `confirmRegistration`. Staff workflow: `addGuidanceNote`, `updateGuidanceNote`, `deleteGuidanceNote`, `updateCaseStatus`. Invalid IDs and edits to confirmed drafts throw `IllegalArgumentException`; keep UI input handling around those calls. Academic catalog and completed courses have no repository mutation methods.
+Create `CourseSyncRepository(CourseSyncDatabase.get(context))` at the app entry point and call its suspend methods from a coroutine. Reads: `students`, `courses`, `groups`, `drafts`, `reopenDraft`, `registrations`, `cases`, `notes`, `caseHistory`. Draft edits: `saveDraft`, `renameDraft`, `deleteDraft`, `addSelection`, `removeSelection`, `changeSelection`, `replaceSelection` (atomic old-course replacement). Registration: `validateDraft`, `confirmRegistration`, `registrationSelections` (the frozen saved snapshot). Staff workflow: `addGuidanceNote`, `updateGuidanceNote`, `deleteGuidanceNote`, `updateCaseStatus`. Invalid IDs and edits to confirmed drafts throw `IllegalArgumentException`; keep UI input handling around those calls. Academic catalog and completed courses have no repository mutation methods.
 
 `confirmRegistration` returns `Confirmed`, `Invalid` with structured issues, or `AlreadyConfirmed`. It validates and writes the registration and frozen selection snapshot in one Room transaction. A unique `draftId` index is an additional duplicate guard. Confirmed drafts cannot be edited or deleted. Group capacity counts confirmed registration selections.
 
@@ -37,3 +37,9 @@ Create `CourseSyncRepository(CourseSyncDatabase.get(context))` off the UI thread
 `PlanValidator.validate` returns `ValidationResult` with `ValidationIssue(type, courseIds, groupIds)`. It checks empty selection, group-to-course consistency, completed prerequisites, capacity, and pairwise same-day time overlap. Intervals are half open: `[startMinute, endMinute)`, so 09:00–10:00 and 10:00–11:00 are adjacent and valid. Full groups satisfy occupied seats `>= capacity`. No academic data may be changed through the staff repository methods.
 
 Database version is 1. Future schema changes require a Room migration; destructive fallback is intentionally absent so saved data survives app restarts and schema upgrades must be handled explicitly.
+
+## Member 1 integration
+
+Review reads the selected draft, current catalog, groups, and structured validator issues on entry. Returning from `Correction` reloads review and validation. `Confirm` displays the draft and calls `confirmRegistration` again; the button is disabled while the call runs. `Success` reads the persisted `RegistrationSelection` snapshot by registration ID, including on `AlreadyConfirmed`. The prototype shows credit totals, but the shared `Course` model has no credits field, so Member 1 displays accurate module counts only.
+
+`feature.review.CorrectionScreen` is a temporary editor while Member 2's course selection and Member 3's group/timetable editing screens are placeholders. It receives the affected draft, course, group, and issue type from review. It can change a group, remove a prerequisite-blocked module, replace a full class, or add a module to an empty draft using repository methods. Replace this route with the relevant member-owned editor when those screens are ready; keep the ID arguments and reload review on return. `View my timetable` currently opens Member 3's existing placeholder route.

@@ -25,6 +25,8 @@ class RepositoryInstrumentedTest {
             assertTrue(repository.confirmRegistration("D-VALID") is ConfirmationResult.Confirmed)
             assertTrue(repository.confirmRegistration("D-VALID") is ConfirmationResult.AlreadyConfirmed)
             assertEquals(1, repository.registrations("S1").size)
+            val saved = repository.registrations("S1").single()
+            assertEquals(2, repository.registrationSelections(saved.id).size)
         } finally { db.close() }
     }
 }
