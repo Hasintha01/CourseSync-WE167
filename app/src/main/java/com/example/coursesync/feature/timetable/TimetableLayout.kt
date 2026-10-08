@@ -3,7 +3,11 @@ package com.example.coursesync.feature.timetable
 import com.example.coursesync.shared.model.ClassGroup
 
 internal val timetableDays = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-internal fun timetableTime(minute: Int): String = "%02d:%02d".format(minute / 60, minute % 60)
+internal fun timetableTime(minute: Int): String {
+    val hours = minute / 60
+    val minutes = minute % 60
+    return "%02d:%02d".format(hours, minutes)
+}
 
 /** Separate overlapping blocks into lanes; adjacent sessions may share a lane. */
 internal data class SessionPlacement(val group: ClassGroup, val lane: Int, val laneCount: Int)
