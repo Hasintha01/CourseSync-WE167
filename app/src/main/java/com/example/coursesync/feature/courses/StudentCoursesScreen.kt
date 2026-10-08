@@ -59,6 +59,10 @@ fun StudentCoursesScreen(
         mutableStateOf<Draft?>(null)
     }
 
+    var confirmedDraftIds by remember {
+        mutableStateOf<Set<String>>(emptySet())
+    }
+
     var selections by remember {
         mutableStateOf<List<DraftSelection>>(emptyList())
     }
@@ -80,11 +84,12 @@ fun StudentCoursesScreen(
     }
 
     LaunchedEffect(Unit) {
+        confirmedDraftIds = repository.registrations(studentId).map { it.draftId }.toSet()
         courses = repository.courses()
         groups = repository.groups()
 
         val existing = repository.drafts(studentId)
-            .firstOrNull { it.name == "Current Plan" }
+            .firstOrNull { it.name == "Current Plan" && it.id !in confirmedDraftIds }
 
         currentDraft = existing
 
@@ -111,9 +116,13 @@ fun StudentCoursesScreen(
     fun getOrCreateCurrentDraft(onReady: (Draft) -> Unit) {
         scope.launch {
 
+            val confirmedIds = repository.registrations(studentId).map { it.draftId }.toSet()
+            confirmedDraftIds = confirmedIds
+
             val existing = currentDraft
+                ?.takeIf { it.id !in confirmedIds }
                 ?: repository.drafts(studentId)
-                    .firstOrNull { it.name == "Current Plan" }
+                    .firstOrNull { it.name == "Current Plan" && it.id !in confirmedIds }
 
             val draft = existing
                 ?: repository.saveDraft(

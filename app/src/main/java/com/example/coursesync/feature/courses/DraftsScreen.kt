@@ -50,6 +50,10 @@ fun DraftsScreen(
         mutableStateOf<List<Draft>>(emptyList())
     }
 
+    var confirmedDraftIds by remember {
+        mutableStateOf<Set<String>>(emptySet())
+    }
+
     var selectedDraft by remember {
         mutableStateOf<Draft?>(null)
     }
@@ -72,6 +76,7 @@ fun DraftsScreen(
 
     fun loadDrafts() {
         scope.launch {
+            confirmedDraftIds = repository.registrations(studentId).map { it.draftId }.toSet()
             drafts = repository.drafts(studentId)
         }
     }
@@ -119,6 +124,8 @@ fun DraftsScreen(
                     key = { it.id }
                 ) { draft ->
 
+                    val isConfirmed = draft.id in confirmedDraftIds
+
                     Card(
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -138,6 +145,10 @@ fun DraftsScreen(
                                 text = "Draft ID: ${draft.id}",
                                 style = MaterialTheme.typography.bodySmall
                             )
+
+                            if (isConfirmed) {
+                                Text("Confirmed registration • Read only")
+                            }
 
                             Spacer(modifier = Modifier.height(12.dp))
 
@@ -162,6 +173,7 @@ fun DraftsScreen(
                                 }
 
                                 OutlinedButton(
+                                    enabled = !isConfirmed,
                                     onClick = {
                                         selectedDraft = draft
                                         newName = draft.name
@@ -172,6 +184,7 @@ fun DraftsScreen(
                                 }
 
                                 OutlinedButton(
+                                    enabled = !isConfirmed,
                                     onClick = {
                                         selectedDraft = draft
                                         showDeleteDialog = true
