@@ -12,11 +12,12 @@ internal fun timetablePlacements(groups: List<ClassGroup>): List<SessionPlacemen
     val cluster = mutableListOf<ClassGroup>()
     var clusterEnd = -1
     fun flush() {
-        val ends = mutableListOf<Int>()
+        // Track when each lane becomes available for the next class.
+        val laneEndMinutes = mutableListOf<Int>()
         val lanes = cluster.map { group ->
-            val available = ends.indexOfFirst { it <= group.startMinute }
-            val lane = if (available < 0) ends.size.also { ends.add(group.endMinute) }
-                else available.also { ends[it] = group.endMinute }
+            val available = laneEndMinutes.indexOfFirst { it <= group.startMinute }
+            val lane = if (available < 0) laneEndMinutes.size.also { laneEndMinutes.add(group.endMinute) }
+                else available.also { laneEndMinutes[it] = group.endMinute }
             group to lane
         }
         result += lanes.map { (group, lane) -> SessionPlacement(group, lane, ends.size) }
