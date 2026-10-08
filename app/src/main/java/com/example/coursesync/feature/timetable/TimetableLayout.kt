@@ -27,7 +27,8 @@ internal fun timetablePlacements(groups: List<ClassGroup>): List<SessionPlacemen
         result += lanes.map { (group, lane) -> SessionPlacement(group, lane, laneEndMinutes.size) }
         cluster.clear()
     }
-    day.sortedWith(compareBy<ClassGroup> { it.startMinute }.thenBy { it.id }).forEach { group ->
+    val orderedGroups = day.sortedWith(compareBy<ClassGroup> { it.startMinute }.thenBy { it.id })
+    orderedGroups.forEach { group ->
         if (cluster.isNotEmpty() && group.startMinute >= clusterEnd) flushCluster()
         if (cluster.isEmpty()) clusterEnd = group.endMinute else clusterEnd = maxOf(clusterEnd, group.endMinute)
         cluster += group
