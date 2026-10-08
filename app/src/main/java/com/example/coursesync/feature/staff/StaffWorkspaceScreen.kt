@@ -96,6 +96,7 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier) {
                         noteText = ""
                         showNoteEditor = true
                     }) { Text("Add note") }
+                    //update status
                     OutlinedButton(onClick = { showStatusEditor = true }) { Text("Update status") }
                 }
                 Text("Guidance notes", style = MaterialTheme.typography.titleMedium)
