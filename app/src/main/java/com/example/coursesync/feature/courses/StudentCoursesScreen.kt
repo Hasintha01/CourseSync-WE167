@@ -4,11 +4,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -33,7 +36,9 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun StudentCoursesScreen(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    activeDraftId: String,
+    onDraftChange: (String) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -82,62 +87,55 @@ fun StudentCoursesScreen(
     var draftName by remember {
         mutableStateOf("")
     }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var remainingSeats by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
 
-    LaunchedEffect(Unit) {
+    suspend fun refresh() {
         confirmedDraftIds = repository.registrations(studentId).map { it.draftId }.toSet()
         courses = repository.courses()
         groups = repository.groups()
-
-        val existing = repository.drafts(studentId)
-            .firstOrNull { it.name == "Current Plan" && it.id !in confirmedDraftIds }
-
-        currentDraft = existing
-
-        if (existing != null) {
-            selections = repository
-                .reopenDraft(existing.id)
-                ?.second
-                ?: emptyList()
-        }
+        remainingSeats = repository.remainingSeats(groups)
+        val pair = repository.reopenDraft(activeDraftId)
+        currentDraft = pair?.first
+        selections = pair?.second.orEmpty()
     }
+
+    LaunchedEffect(activeDraftId) { refresh() }
 
     fun reloadPlan() {
         scope.launch {
             val draft = currentDraft
 
             if (draft != null) {
-                selections =
-                    repository.reopenDraft(draft.id)?.second
-                        ?: emptyList()
+                selections = repository.reopenDraft(draft.id)?.second.orEmpty()
+                remainingSeats = repository.remainingSeats(groups)
             }
         }
     }
 
     fun getOrCreateCurrentDraft(onReady: (Draft) -> Unit) {
         scope.launch {
-
-            val confirmedIds = repository.registrations(studentId).map { it.draftId }.toSet()
-            confirmedDraftIds = confirmedIds
-
-            val existing = currentDraft
-                ?.takeIf { it.id !in confirmedIds }
-                ?: repository.drafts(studentId)
-                    .firstOrNull { it.name == "Current Plan" && it.id !in confirmedIds }
-
-            val draft = existing
-                ?: repository.saveDraft(
-                    studentId = studentId,
-                    name = "Current Plan"
-                )
-
-            currentDraft = draft
-            onReady(draft)
+            try {
+                val confirmedIds = repository.registrations(studentId).map { it.draftId }.toSet()
+                confirmedDraftIds = confirmedIds
+                val draft = currentDraft?.takeIf { it.id !in confirmedIds }
+                    ?: repository.saveDraft(studentId = studentId, name = "Current Plan")
+                currentDraft = draft
+                if (draft.id != activeDraftId) onDraftChange(draft.id)
+                onReady(draft)
+            } catch (exception: Exception) {
+                message = exception.message ?: "Could not open an editable draft"
+                busy = false
+            }
         }
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
 
@@ -160,9 +158,11 @@ fun StudentCoursesScreen(
          */
 
         Text(
-            text = "Current Plan",
+            text = "Active draft: ${currentDraft?.name ?: "Choose a draft in Saved Drafts"}",
             style = MaterialTheme.typography.titleLarge
         )
+        if (currentDraft?.id in confirmedDraftIds) Text("Confirmed registration • Read only")
+        message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -216,11 +216,12 @@ fun StudentCoursesScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Row(
+                        FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
 
                             OutlinedButton(
+                                enabled = currentDraft?.id !in confirmedDraftIds && !busy,
                                 onClick = {
                                     changeSelection = selection
                                 }
@@ -229,6 +230,7 @@ fun StudentCoursesScreen(
                             }
 
                             OutlinedButton(
+                                enabled = currentDraft?.id !in confirmedDraftIds && !busy,
                                 onClick = {
 
                                     val draft = currentDraft
@@ -236,12 +238,15 @@ fun StudentCoursesScreen(
                                     if (draft != null) {
                                         scope.launch {
 
-                                            repository.removeSelection(
-                                                draftId = draft.id,
-                                                courseId = selection.courseId
-                                            )
-
-                                            reloadPlan()
+                                            busy = true
+                                            try {
+                                                repository.removeSelection(draft.id, selection.courseId)
+                                                reloadPlan()
+                                                message = "Module removed from ${draft.name}."
+                                            } catch (exception: Exception) {
+                                                message = exception.message ?: "Could not remove module"
+                                            }
+                                            busy = false
                                         }
                                     }
                                 }
@@ -257,9 +262,10 @@ fun StudentCoursesScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         Button(
-            enabled = selections.isNotEmpty(),
+            enabled = selections.isNotEmpty() && !busy,
             onClick = {
                 draftName = ""
+                saveError = null
                 showSaveDialog = true
             },
             modifier = Modifier.fillMaxWidth()
@@ -281,7 +287,7 @@ fun StudentCoursesScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth().height(420.dp),
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -396,36 +402,37 @@ fun StudentCoursesScreen(
                                     }"
                                 )
 
-                                Text(
-                                    text = "Capacity: ${group.capacity}"
-                                )
+                                val remaining = remainingSeats[group.id] ?: 0
+                                Text("$remaining of ${group.capacity} seats available")
 
                                 Spacer(
                                     modifier = Modifier.height(6.dp)
                                 )
 
                                 Button(
-                                    enabled = group.capacity > 0,
+                                    enabled = remaining > 0 && !busy,
                                     onClick = {
 
+                                        busy = true
                                         getOrCreateCurrentDraft { draft ->
 
                                             scope.launch {
 
-                                                repository.addSelection(
-                                                    draftId = draft.id,
-                                                    courseId = course.id,
-                                                    groupId = group.id
-                                                )
-
-                                                reloadPlan()
-                                                selectedCourse = null
+                                                try {
+                                                    repository.addSelection(draft.id, course.id, group.id)
+                                                    reloadPlan()
+                                                    selectedCourse = null
+                                                    message = "${course.title} added to ${draft.name}."
+                                                } catch (exception: Exception) {
+                                                    message = exception.message ?: "Could not add module"
+                                                }
+                                                busy = false
                                             }
                                         }
                                     }
                                 ) {
                                     Text(
-                                        if (group.capacity > 0) {
+                                        if (remaining > 0) {
                                             "Add to Plan"
                                         } else {
                                             "Full"
@@ -479,7 +486,7 @@ fun StudentCoursesScreen(
                     courseGroups.forEach { group ->
 
                         OutlinedButton(
-                            enabled = group.capacity > 0,
+                            enabled = (remainingSeats[group.id] ?: 0) > 0 && !busy,
                             onClick = {
 
                                 val draft = currentDraft
@@ -488,14 +495,16 @@ fun StudentCoursesScreen(
 
                                     scope.launch {
 
-                                        repository.changeSelection(
-                                            draftId = draft.id,
-                                            courseId = selection.courseId,
-                                            newGroupId = group.id
-                                        )
-
-                                        reloadPlan()
-                                        changeSelection = null
+                                        busy = true
+                                        try {
+                                            repository.changeSelection(draft.id, selection.courseId, group.id)
+                                            reloadPlan()
+                                            changeSelection = null
+                                            message = "Group changed to ${group.label}."
+                                        } catch (exception: Exception) {
+                                            message = exception.message ?: "Could not change group"
+                                        }
+                                        busy = false
                                     }
                                 }
                             },
@@ -532,56 +541,52 @@ fun StudentCoursesScreen(
     if (showSaveDialog) {
 
         AlertDialog(
-            onDismissRequest = {
-                showSaveDialog = false
-            },
+            onDismissRequest = { if (!busy) showSaveDialog = false },
             title = {
                 Text("Save Draft")
             },
             text = {
-
-                OutlinedTextField(
-                    value = draftName,
-                    onValueChange = {
-                        draftName = it
-                    },
-                    label = {
-                        Text("Draft name")
-                    },
-                    placeholder = {
-                        Text("Example: Semester 2 Plan")
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = draftName,
+                        onValueChange = { draftName = it; saveError = null },
+                        label = { Text("Draft name") },
+                        placeholder = { Text("Example: Semester 2 Plan") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
             },
             confirmButton = {
 
                 TextButton(
-                    enabled = draftName.isNotBlank(),
+                    enabled = draftName.isNotBlank() && !busy,
                     onClick = {
 
                         val trimmedName = draftName.trim()
-
+                        saveError = null
+                        busy = true
                         scope.launch {
-
-                            repository.saveDraft(
-                                studentId = studentId,
-                                name = trimmedName,
-                                selections = selections
-                            )
-
-                            showSaveDialog = false
-                            draftName = ""
+                            try {
+                                val saved = repository.saveDraft(studentId, trimmedName, selections)
+                                showSaveDialog = false
+                                draftName = ""
+                                message = "Saved ${saved.name} with ${selections.size} modules."
+                            } catch (exception: Exception) {
+                                saveError = exception.message ?: "Could not save draft"
+                            }
+                            busy = false
                         }
                     }
                 ) {
-                    Text("Save")
+                    Text(if (busy) "Saving…" else "Save")
                 }
             },
             dismissButton = {
 
                 TextButton(
+                    enabled = !busy,
                     onClick = {
                         showSaveDialog = false
                     }

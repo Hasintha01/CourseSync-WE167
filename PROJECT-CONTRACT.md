@@ -1,6 +1,6 @@
 # CourseSync shared contract (IT3060 WE_167)
 
-The existing role selector and `CourseSyncApp` routes remain the navigation entry points. This foundation provides Room data and operations; member screens are still placeholders. No login or remote service is used. Demo identity is `S1` (Asha Perera).
+The existing role selector and `CourseSyncApp` routes remain the navigation entry points. Onboarding, review, courses, drafts, and staff screens are implemented. The timetable route remains Member 3's placeholder. No login or remote service is used. Demo identity is `S1` (Asha Perera).
 
 ## Ownership and routes
 
@@ -11,7 +11,7 @@ The existing role selector and `CourseSyncApp` routes remain the navigation entr
 | 3 | `feature.timetable` | `Timetable` | Timetable and clash resolution |
 | 4 | `feature.staff` | `Staff` | Cases, notes, status, history |
 
-`Roles` and `StudentHome` are shared navigation routes. `CourseSyncApp` retains both Student and Staff entry points. Onboarding completion and the active draft ID are stored in `coursesync_ui` SharedPreferences. Onboarding appears on first launch; Replay onboarding is available from role selection. Review opens the last active draft, defaulting to `D-VALID`, and its draft menu exposes all repeatable scenarios. `shared.model`, `shared.data`, and `shared.validation` are jointly owned.
+`Roles` and `StudentHome` are shared navigation routes. `CourseSyncApp` retains both Student and Staff entry points. Onboarding completion and the active draft ID are stored in `coursesync_ui` SharedPreferences. Onboarding appears on first launch; Replay onboarding is available from role selection. Courses, Drafts, and Review use the same active draft ID, defaulting to `D-VALID`; reopening a saved draft makes it active. The review draft menu exposes all repeatable scenarios. `shared.model`, `shared.data`, and `shared.validation` are jointly owned.
 
 ## Sample data and repeatable scenarios
 
@@ -42,4 +42,4 @@ Database version is 1. Future schema changes require a Room migration; destructi
 
 Review reads the selected draft, current catalog, groups, and structured validator issues on entry. Returning from `Correction` reloads review and validation. `Confirm` displays the draft and calls `confirmRegistration` again; the button is disabled while the call runs. `Success` reads the persisted `RegistrationSelection` snapshot by registration ID, including on `AlreadyConfirmed`. The prototype shows credit totals, but the shared `Course` model has no credits field, so Member 1 displays accurate module counts only.
 
-`feature.review.CorrectionScreen` is a temporary editor while Member 2's course selection and Member 3's group/timetable editing screens are placeholders. It receives the affected draft, course, group, and issue type from review. It can change a group, remove a prerequisite-blocked module, replace a full class, or add a module to an empty draft using repository methods. Replace this route with the relevant member-owned editor when those screens are ready; keep the ID arguments and reload review on return. `View my timetable` currently opens Member 3's existing placeholder route.
+`feature.review.CorrectionScreen` receives the affected draft, course, group, and issue type from review. It can change a group, remove a prerequisite-blocked module, replace a full class, or add a module to an empty draft using repository methods. Course selection and group editing are also available in the implemented Courses screen. Review reloads validation on return. `View my timetable` currently opens Member 3's existing placeholder route; connecting that route to the active draft and confirmed registration snapshot remains pending.

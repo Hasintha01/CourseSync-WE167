@@ -18,27 +18,72 @@ import com.example.coursesync.shared.model.Registration
 import com.example.coursesync.shared.model.RegistrationSelection
 import com.example.coursesync.ui.theme.PrototypeStyle as P
 
+private enum class RegistrationLoadState { LOADING, FOUND, MISSING, FAILED }
+
 @Composable
 fun SuccessScreen(repository: CourseSyncRepository, registrationId: String, onBack: () -> Unit, onTimetable: () -> Unit) {
     var registration by remember(registrationId) { mutableStateOf<Registration?>(null) }
     var selections by remember(registrationId) { mutableStateOf<List<RegistrationSelection>>(emptyList()) }
     var courses by remember { mutableStateOf<List<Course>>(emptyList()) }
     var groups by remember { mutableStateOf<List<ClassGroup>>(emptyList()) }
-    LaunchedEffect(registrationId) {
-        registration = repository.registrations("S1").firstOrNull { it.id == registrationId }
-        selections = repository.registrationSelections(registrationId)
-        courses = repository.courses()
-        groups = repository.groups()
+    var loadState by remember(registrationId) { mutableStateOf(RegistrationLoadState.LOADING) }
+    var error by remember(registrationId) { mutableStateOf<String?>(null) }
+    var retry by remember(registrationId) { mutableIntStateOf(0) }
+    LaunchedEffect(registrationId, retry) {
+        loadState = RegistrationLoadState.LOADING
+        registration = null
+        error = null
+        if (registrationId.isBlank()) {
+            loadState = RegistrationLoadState.MISSING
+        } else try {
+            val found = repository.registrations("S1").firstOrNull { it.id == registrationId }
+            if (found == null) {
+                loadState = RegistrationLoadState.MISSING
+            } else {
+                val savedSelections = repository.registrationSelections(found.id)
+                val savedCourses = repository.courses()
+                val savedGroups = repository.groups()
+                selections = savedSelections
+                courses = savedCourses
+                groups = savedGroups
+                registration = found
+                loadState = RegistrationLoadState.FOUND
+            }
+        } catch (exception: Exception) {
+            error = exception.message ?: "Could not load the registration"
+            loadState = RegistrationLoadState.FAILED
+        }
     }
-    RegistrationScaffold("03 / COMPLETE", "Registration complete", "Your modules are confirmed.", onBack,
+    RegistrationScaffold(if (loadState == RegistrationLoadState.FOUND) "03 / COMPLETE" else "03 / STATUS",
+        if (loadState == RegistrationLoadState.FOUND) "Registration complete" else "Registration status",
+        when (loadState) {
+            RegistrationLoadState.LOADING -> "Checking your saved registration."
+            RegistrationLoadState.FOUND -> "Your modules are confirmed."
+            RegistrationLoadState.MISSING -> "This registration could not be found."
+            RegistrationLoadState.FAILED -> "The saved registration could not be loaded."
+        }, onBack,
         footer = {
-            Text("Registration saved · ${registration?.studentId ?: "S1"}", color = P.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            PrimaryAction("View my timetable", onTimetable)
+            when (loadState) {
+                RegistrationLoadState.LOADING -> PrimaryAction("Loading registration…", {}, enabled = false)
+                RegistrationLoadState.FOUND -> {
+                    Text("Registration saved · ${registration?.studentId}", color = P.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(8.dp))
+                    PrimaryAction("View my timetable", onTimetable, enabled = !registration?.id.isNullOrBlank())
+                }
+                RegistrationLoadState.MISSING -> PrimaryAction("Return to student workspace", onBack)
+                RegistrationLoadState.FAILED -> PrimaryAction("Retry loading registration", { retry++ })
+            }
         }) {
-        if (registration == null) {
-            CircularProgressIndicator(color = P.blue)
-        } else {
+        when (loadState) {
+            RegistrationLoadState.LOADING -> CircularProgressIndicator(color = P.blue)
+            RegistrationLoadState.MISSING -> {
+                InfoBanner("Registration not found", "No saved registration matches this ID. Return to your workspace and open a confirmed draft.", positive = false)
+            }
+            RegistrationLoadState.FAILED -> {
+                InfoBanner("Could not load registration", error ?: "Please try again.", positive = false)
+                TextButton(onClick = onBack) { Text("Return to student workspace") }
+            }
+            RegistrationLoadState.FOUND -> {
             Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
                 Box(Modifier.size(84.dp).background(P.paleGreen, RoundedCornerShape(50)), contentAlignment = Alignment.Center) {
                     Text("✓", color = P.green, fontSize = 35.sp)
@@ -68,6 +113,7 @@ fun SuccessScreen(repository: CourseSyncRepository, registrationId: String, onBa
                 }
             }
             Text("Registration ID: ${registration?.id}", color = P.muted, fontSize = 12.sp)
+            }
         }
         Spacer(Modifier.height(8.dp))
     }

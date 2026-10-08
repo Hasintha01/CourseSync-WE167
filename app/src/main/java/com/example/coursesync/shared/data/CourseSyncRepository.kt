@@ -18,6 +18,11 @@ class CourseSyncRepository(private val database: CourseSyncDatabase) {
     suspend fun students() = dao.students()
     suspend fun courses() = dao.courses()
     suspend fun groups() = dao.groups()
+    suspend fun occupiedSeats(): Map<String, Int> = dao.seatCounts().associate { it.groupId to it.seats }
+    suspend fun remainingSeats(groups: List<ClassGroup>): Map<String, Int> {
+        val occupied = occupiedSeats()
+        return groups.associate { it.id to (it.capacity - (occupied[it.id] ?: 0)).coerceAtLeast(0) }
+    }
     suspend fun drafts(studentId: String) = dao.drafts(studentId)
     suspend fun reopenDraft(draftId: String): Pair<Draft, List<DraftSelection>>? =
         dao.draft(draftId)?.let { it to dao.selections(draftId) }
