@@ -28,15 +28,19 @@ fun CorrectionScreen(
     var chosenGroupId by remember(draftId, issueType) { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var remainingSeats by remember(draftId) { mutableStateOf<Map<String, Int>>(emptyMap()) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(draftId) { plan = loadPlan(repository, draftId) }
+    LaunchedEffect(draftId) {
+        plan = loadPlan(repository, draftId)
+        remainingSeats = repository.remainingSeats(plan?.groups.orEmpty())
+    }
     val current = plan
     val selected = current?.selections?.firstOrNull { it.courseId == affectedCourseId || it.groupId == affectedGroupId }
     val targetCourseId = selected?.courseId ?: affectedCourseId
     val choices = when (issueType) {
         IssueType.TIME_OVERLAP, IssueType.UNKNOWN_GROUP -> current?.groups?.filter { it.courseId == targetCourseId && it.id != selected?.groupId }.orEmpty()
         IssueType.FULL_GROUP, IssueType.EMPTY_SELECTION -> current?.groups?.filter { group ->
-            group.capacity > 0 && current.selections.none { it.courseId == group.courseId } && group.id != affectedGroupId
+            current.selections.none { it.courseId == group.courseId } && group.id != affectedGroupId
         }.orEmpty()
         IssueType.MISSING_PREREQUISITE -> emptyList()
     }
@@ -83,7 +87,8 @@ fun CorrectionScreen(
                 } catch (exception: Exception) { error = exception.message ?: "Could not update draft" }
                 busy = false
             }
-        }, enabled = !busy && current != null && (issueType == IssueType.MISSING_PREREQUISITE || chosenGroupId != null))
+        }, enabled = !busy && current != null && (issueType == IssueType.MISSING_PREREQUISITE ||
+            (chosenGroupId != null && (remainingSeats[chosenGroupId] ?: 0) > 0)))
     }) {
         if (current == null) {
             CircularProgressIndicator(color = P.blue)
@@ -108,6 +113,7 @@ fun CorrectionScreen(
                 if (choices.isEmpty()) Text("No alternative is available in this sample. Remove the affected selection or return to the course workspace.", color = P.muted)
                 choices.forEach { group ->
                     ChoiceCard(group, current.courses.firstOrNull { it.id == group.courseId }?.title.orEmpty(),
+                        remaining = remainingSeats[group.id] ?: 0,
                         chosen = chosenGroupId == group.id, onClick = { chosenGroupId = group.id })
                 }
                 Text("Changes are saved to this draft. Review validation again before confirming.", color = P.muted, fontSize = 13.sp)
@@ -118,16 +124,18 @@ fun CorrectionScreen(
 }
 
 @Composable
-private fun ChoiceCard(group: ClassGroup, title: String, chosen: Boolean, onClick: () -> Unit) {
-    Surface(Modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(12.dp), color = Color.White,
+private fun ChoiceCard(group: ClassGroup, title: String, remaining: Int, chosen: Boolean, onClick: () -> Unit) {
+    Surface(Modifier.fillMaxWidth().clickable(enabled = remaining > 0, onClick = onClick), shape = RoundedCornerShape(12.dp), color = Color.White,
         border = BorderStroke(1.dp, if (chosen) P.blue else P.border)) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected = chosen, onClick = onClick)
+            RadioButton(selected = chosen, onClick = onClick, enabled = remaining > 0)
             Spacer(Modifier.width(8.dp))
             Column {
                 Text("${group.courseId} · Group ${group.label}", color = P.ink, fontWeight = FontWeight.Bold)
                 Text(title, color = P.muted, fontSize = 13.sp)
                 Text(groupTime(group), color = P.muted, fontSize = 13.sp)
+                Text(if (remaining > 0) "$remaining seats remaining" else "Full · 0 seats remaining",
+                    color = if (remaining > 0) P.muted else P.red, fontSize = 13.sp)
             }
         }
     }

@@ -3,6 +3,7 @@ package com.example.coursesync.feature.courses
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,7 +31,9 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun DraftsScreen(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    activeDraftId: String,
+    onDraftChange: (String) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -73,6 +76,8 @@ fun DraftsScreen(
     var newName by remember {
         mutableStateOf("")
     }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
 
     fun loadDrafts() {
         scope.launch {
@@ -102,6 +107,7 @@ fun DraftsScreen(
             text = "Open, rename or delete your saved course selections.",
             style = MaterialTheme.typography.bodyMedium
         )
+        message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -138,6 +144,7 @@ fun DraftsScreen(
                                 text = draft.name,
                                 style = MaterialTheme.typography.titleMedium
                             )
+                            if (draft.id == activeDraftId) Text("Active draft", color = MaterialTheme.colorScheme.primary)
 
                             Spacer(modifier = Modifier.height(4.dp))
 
@@ -152,11 +159,12 @@ fun DraftsScreen(
 
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            Row(
+                            FlowRow(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
 
                                 Button(
+                                    enabled = !busy,
                                     onClick = {
                                         scope.launch {
                                             val result =
@@ -165,6 +173,7 @@ fun DraftsScreen(
                                             if (result != null) {
                                                 selectedDraft = result.first
                                                 selectedSelections = result.second
+                                                onDraftChange(draft.id)
                                             }
                                         }
                                     }
@@ -173,7 +182,7 @@ fun DraftsScreen(
                                 }
 
                                 OutlinedButton(
-                                    enabled = !isConfirmed,
+                                    enabled = !isConfirmed && !busy,
                                     onClick = {
                                         selectedDraft = draft
                                         newName = draft.name
@@ -184,7 +193,7 @@ fun DraftsScreen(
                                 }
 
                                 OutlinedButton(
-                                    enabled = !isConfirmed,
+                                    enabled = !isConfirmed && !busy,
                                     onClick = {
                                         selectedDraft = draft
                                         showDeleteDialog = true
@@ -271,21 +280,23 @@ fun DraftsScreen(
             confirmButton = {
 
                 TextButton(
-                    enabled = newName.isNotBlank(),
+                    enabled = newName.isNotBlank() && !busy,
                     onClick = {
 
                         val draft = selectedDraft ?: return@TextButton
 
                         scope.launch {
-
-                            repository.renameDraft(
-                                draftId = draft.id,
-                                name = newName
-                            )
-
-                            showRenameDialog = false
-                            selectedDraft = null
-                            loadDrafts()
+                            busy = true
+                            try {
+                                repository.renameDraft(draft.id, newName)
+                                showRenameDialog = false
+                                selectedDraft = null
+                                loadDrafts()
+                                message = "Draft renamed."
+                            } catch (exception: Exception) {
+                                message = exception.message ?: "Could not rename draft"
+                            }
+                            busy = false
                         }
                     }
                 ) {
@@ -295,6 +306,7 @@ fun DraftsScreen(
             dismissButton = {
 
                 TextButton(
+                    enabled = !busy,
                     onClick = {
                         showRenameDialog = false
                         selectedDraft = null
@@ -331,12 +343,22 @@ fun DraftsScreen(
                     onClick = {
 
                         scope.launch {
-
-                            repository.deleteDraft(draft.id)
-
-                            showDeleteDialog = false
-                            selectedDraft = null
-                            loadDrafts()
+                            busy = true
+                            try {
+                                repository.deleteDraft(draft.id)
+                                showDeleteDialog = false
+                                selectedDraft = null
+                                loadDrafts()
+                                if (activeDraftId == draft.id) {
+                                    val next = repository.drafts(studentId).firstOrNull()
+                                        ?: repository.saveDraft(studentId, "New plan")
+                                    onDraftChange(next.id)
+                                }
+                                message = "Draft deleted."
+                            } catch (exception: Exception) {
+                                message = exception.message ?: "Could not delete draft"
+                            }
+                            busy = false
                         }
                     }
                 ) {

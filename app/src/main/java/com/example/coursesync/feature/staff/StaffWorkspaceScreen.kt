@@ -1,8 +1,10 @@
 package com.example.coursesync.feature.staff
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -38,7 +40,7 @@ import kotlinx.coroutines.launch
 
 /** Member 4's staff workflow, connected to the team's shared repository. */
 @Composable
-fun StaffWorkspaceScreen(modifier: Modifier = Modifier) {
+fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit) {
     val context = LocalContext.current
     val repository = remember(context) { CourseSyncRepository(CourseSyncDatabase.get(context)) }
     val scope = rememberCoroutineScope()
@@ -55,6 +57,18 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier) {
     var showNoteEditor by remember { mutableStateOf(false) }
     var deletingNote by remember { mutableStateOf<GuidanceNote?>(null) }
     var showStatusEditor by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var noteSaveError by remember { mutableStateOf<String?>(null) }
+
+    val goBack: () -> Unit = {
+        when {
+            selectedCase != null -> selectedCase = null
+            selectedStudent != null -> selectedStudent = null
+            else -> onExit()
+        }
+    }
+    BackHandler(onBack = goBack)
 
     LaunchedEffect(Unit) {
         students = repository.students()
@@ -83,17 +97,22 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier) {
     ) {
         Text("Staff Workspace", style = MaterialTheme.typography.headlineSmall)
         Text("Review student registrations and manage guidance cases.")
+        message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+        if (selectedCase == null && selectedStudent == null) {
+            OutlinedButton(onClick = goBack) { Text("Back to workspaces") }
+        }
         when {
             selectedCase != null -> {
                 val staffCase = selectedCase!!
-                OutlinedButton(onClick = { selectedCase = null }) { Text("Back to cases") }
+                OutlinedButton(onClick = goBack) { Text("Back to cases") }
                 Text(staffCase.subject, style = MaterialTheme.typography.titleLarge)
                 Text("${staffCase.id} • Student ${staffCase.studentId}")
                 Text("Status: ${staffCase.status.displayName()}")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = {
                         editingNote = null
                         noteText = ""
+                        noteSaveError = null
                         showNoteEditor = true
                     }) { Text("Add note") }
                     OutlinedButton(onClick = { showStatusEditor = true }) { Text("Update status") }
@@ -104,10 +123,11 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier) {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(note.text)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedButton(onClick = {
                                     editingNote = note
                                     noteText = note.text
+                                    noteSaveError = null
                                     showNoteEditor = true
                                 }) { Text("Edit") }
                                 OutlinedButton(onClick = { deletingNote = note }) { Text("Delete") }
@@ -123,7 +143,7 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier) {
             }
             selectedStudent != null -> {
                 val student = selectedStudent!!
-                OutlinedButton(onClick = { selectedStudent = null }) { Text("Back to students") }
+                OutlinedButton(onClick = goBack) { Text("Back to students") }
                 Text(student.name, style = MaterialTheme.typography.titleLarge)
                 Text("Student ID: ${student.id}")
                 Text("Confirmed registration", style = MaterialTheme.typography.titleMedium)
@@ -136,7 +156,7 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier) {
                 }
             }
             else -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     StaffTab.entries.forEach { tab ->
                         FilterChip(selected = selectedTab == tab, onClick = { selectedTab = tab }, label = { Text(tab.label) })
                     }
@@ -171,22 +191,34 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier) {
 
     if (showNoteEditor && selectedCase != null) {
         AlertDialog(
-            onDismissRequest = { showNoteEditor = false },
+            onDismissRequest = { if (!busy) showNoteEditor = false },
             title = { Text(if (editingNote == null) "Add guidance note" else "Edit guidance note") },
-            text = { OutlinedTextField(noteText, { noteText = it }, label = { Text("Guidance") }, minLines = 3, modifier = Modifier.fillMaxWidth()) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(noteText, { noteText = it; noteSaveError = null },
+                        label = { Text("Guidance") }, minLines = 3, modifier = Modifier.fillMaxWidth())
+                    noteSaveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
             confirmButton = {
-                TextButton(enabled = noteText.isNotBlank(), onClick = {
+                TextButton(enabled = noteText.isNotBlank() && !busy, onClick = {
                     val caseId = selectedCase!!.id
                     val existing = editingNote
+                    noteSaveError = null
+                    busy = true
                     scope.launch {
-                        if (existing == null) repository.addGuidanceNote(caseId, noteText)
-                        else repository.updateGuidanceNote(existing, noteText)
-                        notes = repository.notes(caseId)
-                        showNoteEditor = false
+                        try {
+                            if (existing == null) repository.addGuidanceNote(caseId, noteText)
+                            else repository.updateGuidanceNote(existing, noteText)
+                            notes = repository.notes(caseId)
+                            showNoteEditor = false
+                            message = "Guidance note saved."
+                        } catch (exception: Exception) { noteSaveError = exception.message ?: "Could not save note" }
+                        busy = false
                     }
-                }) { Text("Save") }
+                }) { Text(if (busy) "Saving…" else "Save") }
             },
-            dismissButton = { TextButton(onClick = { showNoteEditor = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(enabled = !busy, onClick = { showNoteEditor = false }) { Text("Cancel") } }
         )
     }
     deletingNote?.let { note ->
@@ -195,11 +227,16 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier) {
             title = { Text("Delete guidance note?") },
             text = { Text("This note will be removed from the case.") },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(enabled = !busy, onClick = {
                     scope.launch {
-                        repository.deleteGuidanceNote(note.caseId, note.id)
-                        notes = repository.notes(note.caseId)
-                        deletingNote = null
+                        busy = true
+                        try {
+                            repository.deleteGuidanceNote(note.caseId, note.id)
+                            notes = repository.notes(note.caseId)
+                            deletingNote = null
+                            message = "Guidance note deleted."
+                        } catch (exception: Exception) { message = exception.message ?: "Could not delete note" }
+                        busy = false
                     }
                 }) { Text("Delete") }
             },
@@ -213,14 +250,19 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     CaseStatus.entries.forEach { status ->
-                        OutlinedButton(enabled = status != selectedCase?.status, onClick = {
+                        OutlinedButton(enabled = status != selectedCase?.status && !busy, onClick = {
                             val staffCase = selectedCase!!
                             scope.launch {
-                                repository.updateCaseStatus(staffCase.id, status)
-                                selectedCase = staffCase.copy(status = status)
-                                cases = repository.cases()
-                                history = repository.caseHistory(staffCase.id)
-                                showStatusEditor = false
+                                busy = true
+                                try {
+                                    repository.updateCaseStatus(staffCase.id, status)
+                                    cases = repository.cases()
+                                    selectedCase = cases.firstOrNull { it.id == staffCase.id }
+                                    history = repository.caseHistory(staffCase.id)
+                                    showStatusEditor = false
+                                    message = "Case status updated to ${status.displayName()}."
+                                } catch (exception: Exception) { message = exception.message ?: "Could not update status" }
+                                busy = false
                             }
                         }, modifier = Modifier.fillMaxWidth()) { Text(status.displayName()) }
                     }

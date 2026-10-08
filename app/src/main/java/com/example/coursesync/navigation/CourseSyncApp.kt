@@ -62,7 +62,7 @@ fun CourseSyncApp() {
             Route.Onboarding, Route.Roles -> Route.Roles.name
         }
     }
-    BackHandler(enabled = route != Route.Roles && route != Route.Onboarding, onBack = goBack)
+    BackHandler(enabled = route != Route.Roles && route != Route.Onboarding && route != Route.Staff, onBack = goBack)
 
     when (route) {
         Route.Onboarding -> OnboardingScreen(onComplete = {
@@ -95,7 +95,7 @@ fun CourseSyncApp() {
             onTimetable = { routeName = Route.Timetable.name })
         else -> Scaffold(modifier = Modifier.fillMaxSize(), topBar = {
             TopAppBar(title = { Text(route.title) }, navigationIcon = {
-                if (route != Route.Roles) TextButton(onClick = goBack) { Text("Back") }
+                if (route != Route.Roles && route != Route.Staff) TextButton(onClick = goBack) { Text("Back") }
             })
         }) { padding ->
             val contentModifier = Modifier.padding(padding)
@@ -113,10 +113,16 @@ fun CourseSyncApp() {
                     onReview = { routeName = Route.Review.name },
                     modifier = contentModifier
                 )
-                Route.Courses -> StudentCoursesScreen(contentModifier)
-                Route.Drafts -> DraftsScreen(contentModifier)
+                Route.Courses -> StudentCoursesScreen(contentModifier, draftId, onDraftChange = {
+                    draftId = it
+                    preferences.edit().putString("active_draft", it).apply()
+                })
+                Route.Drafts -> DraftsScreen(contentModifier, draftId, onDraftChange = {
+                    draftId = it
+                    preferences.edit().putString("active_draft", it).apply()
+                })
                 Route.Timetable -> WeeklyTimetableScreen(contentModifier)
-                Route.Staff -> StaffWorkspaceScreen(contentModifier)
+                Route.Staff -> StaffWorkspaceScreen(contentModifier, onExit = goBack)
                 else -> Unit
             }
         }
