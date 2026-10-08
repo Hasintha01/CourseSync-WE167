@@ -11,7 +11,7 @@ internal fun timetablePlacements(groups: List<ClassGroup>): List<SessionPlacemen
     val result = mutableListOf<SessionPlacement>()
     val cluster = mutableListOf<ClassGroup>()
     var clusterEnd = -1
-    fun flush() {
+    fun flushCluster() {
         // Track when each lane becomes available for the next class.
         val laneEndMinutes = mutableListOf<Int>()
         val lanes = cluster.map { group ->
@@ -20,14 +20,14 @@ internal fun timetablePlacements(groups: List<ClassGroup>): List<SessionPlacemen
                 else available.also { laneEndMinutes[it] = group.endMinute }
             group to lane
         }
-        result += lanes.map { (group, lane) -> SessionPlacement(group, lane, ends.size) }
+        result += lanes.map { (group, lane) -> SessionPlacement(group, lane, laneEndMinutes.size) }
         cluster.clear()
     }
     day.sortedWith(compareBy<ClassGroup> { it.startMinute }.thenBy { it.id }).forEach { group ->
-        if (cluster.isNotEmpty() && group.startMinute >= clusterEnd) flush()
+        if (cluster.isNotEmpty() && group.startMinute >= clusterEnd) flushCluster()
         if (cluster.isEmpty()) clusterEnd = group.endMinute else clusterEnd = maxOf(clusterEnd, group.endMinute)
         cluster += group
     }
-    if (cluster.isNotEmpty()) flush()
+    if (cluster.isNotEmpty()) flushCluster()
     result
 }
