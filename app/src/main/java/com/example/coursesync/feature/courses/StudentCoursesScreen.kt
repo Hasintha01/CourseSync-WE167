@@ -26,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.coursesync.feature.timetable.ClashWarning
 import com.example.coursesync.shared.data.CourseSyncDatabase
 import com.example.coursesync.shared.data.CourseSyncRepository
 import com.example.coursesync.shared.model.ClassGroup
@@ -38,7 +39,8 @@ import kotlinx.coroutines.launch
 fun StudentCoursesScreen(
     modifier: Modifier = Modifier,
     activeDraftId: String,
-    onDraftChange: (String) -> Unit
+    onDraftChange: (String) -> Unit,
+    onTimetable: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -163,6 +165,7 @@ fun StudentCoursesScreen(
         )
         if (currentDraft?.id in confirmedDraftIds) Text("Confirmed registration • Read only")
         message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+        if (currentDraft?.id !in confirmedDraftIds) ClashWarning(selections, groups, courses, onTimetable)
 
         Spacer(modifier = Modifier.height(8.dp))
 

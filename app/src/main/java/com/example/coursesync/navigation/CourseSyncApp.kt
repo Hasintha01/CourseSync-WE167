@@ -116,12 +116,16 @@ fun CourseSyncApp() {
                 Route.Courses -> StudentCoursesScreen(contentModifier, draftId, onDraftChange = {
                     draftId = it
                     preferences.edit().putString("active_draft", it).apply()
-                })
+                }, onTimetable = { routeName = Route.Timetable.name })
                 Route.Drafts -> DraftsScreen(contentModifier, draftId, onDraftChange = {
                     draftId = it
                     preferences.edit().putString("active_draft", it).apply()
                 })
-                Route.Timetable -> WeeklyTimetableScreen(contentModifier)
+                Route.Timetable -> WeeklyTimetableScreen(repository, draftId,
+                    onBrowse = { routeName = Route.Courses.name },
+                    onReview = { routeName = Route.Review.name },
+                    onDrafts = { routeName = Route.Drafts.name },
+                    modifier = contentModifier)
                 Route.Staff -> StaffWorkspaceScreen(contentModifier, onExit = goBack)
                 else -> Unit
             }
