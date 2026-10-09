@@ -9,6 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import com.example.coursesync.ui.theme.AppPrimaryButton as Button
+import com.example.coursesync.ui.theme.AppOutlinedButton as OutlinedButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -87,7 +89,7 @@ fun WeeklyTimetableScreen(
         } finally { loading = false }
     }
 
-    Column(modifier.fillMaxSize().background(Style.background).verticalScroll(rememberScrollState()).padding(20.dp),
+    Column(modifier.fillMaxSize().background(Style.background).verticalScroll(rememberScrollState()).padding(Style.pagePadding),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(if (confirmed) "REGISTERED / TIMETABLE" else "PLAN / TIMETABLE", color = Style.blue,
             style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
@@ -130,8 +132,9 @@ fun WeeklyTimetableScreen(
                     }
                 }
             } else {
-                WeeklyGrid(selectedGroups, conflictingIds, onSession = { if (!confirmed && !busy) editingId = it.courseId })
-                Text("${selectedGroups.size} modules • ${clashes.size} clashes", fontWeight = FontWeight.Bold, color = Style.ink)
+                WeeklyGrid(selectedGroups, conflictingIds, editable = !confirmed && !busy,
+                    onSession = { editingId = it.courseId })
+                Text("${selectedGroups.size} ${if (selectedGroups.size == 1) "module" else "modules"} • ${clashes.size} ${if (clashes.size == 1) "clash" else "clashes"}", fontWeight = FontWeight.Bold, color = Style.ink)
                 Text("Selected classes", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 selectedGroups.sortedWith(compareBy<ClassGroup> { it.day }.thenBy { it.startMinute }).forEach { group ->
                     Surface(color = androidx.compose.ui.graphics.Color.White, shape = RoundedCornerShape(14.dp)) {
@@ -217,7 +220,7 @@ private fun Notice(message: String, warning: Boolean) {
 }
 
 @Composable
-private fun WeeklyGrid(groups: List<ClassGroup>, conflicts: Set<String>, onSession: (ClassGroup) -> Unit) {
+private fun WeeklyGrid(groups: List<ClassGroup>, conflicts: Set<String>, editable: Boolean, onSession: (ClassGroup) -> Unit) {
     val firstMinute = minOf(480, (groups.minOf { it.startMinute } / 60) * 60)
     val lastMinute = maxOf(720, ((groups.maxOf { it.endMinute } + 59) / 60) * 60)
     val placements = remember(groups) { timetablePlacements(groups) }
@@ -226,7 +229,8 @@ private fun WeeklyGrid(groups: List<ClassGroup>, conflicts: Set<String>, onSessi
     Surface(color = androidx.compose.ui.graphics.Color.White, shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("WEEKLY TIMETABLE", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Style.ink)
-            Text("Swipe across to see every day. Tap a class to inspect groups.", style = MaterialTheme.typography.bodySmall, color = Style.muted)
+            Text(if (editable) "Swipe across to see every day. Tap a class to inspect groups." else "Swipe across to see every day. Confirmed classes are read only.",
+                style = MaterialTheme.typography.bodySmall, color = Style.muted)
             Row(Modifier.horizontalScroll(rememberScrollState())) {
                 Column(Modifier.width(54.dp)) {
                     Spacer(Modifier.height(32.dp))
@@ -248,7 +252,8 @@ private fun WeeklyGrid(groups: List<ClassGroup>, conflicts: Set<String>, onSessi
                                 .width(width - 4.dp).height(hourHeight * ((group.endMinute - group.startMinute) / 60f))
                                 .background(if (clash) Style.paleRed else Style.paleBlue, RoundedCornerShape(6.dp))
                                 .border(1.dp, if (clash) Style.red else Style.blue, RoundedCornerShape(6.dp))
-                                .clickable { onSession(group) }.semantics(mergeDescendants = true) { contentDescription = label }
+                                .then(if (editable) Modifier.clickable { onSession(group) } else Modifier)
+                                .semantics(mergeDescendants = true) { contentDescription = label }
                                 .padding(5.dp)) {
                                 Text(group.courseId, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = if (clash) Style.red else Style.blue)
                                 Text("Group ${group.label}", style = MaterialTheme.typography.labelSmall)

@@ -17,7 +17,7 @@ fun ClashWarning(selections: List<DraftSelection>, groups: List<ClassGroup>, cou
     val clashes = PlanValidator.validate(selections, groups, courses, emptySet(), emptyMap()).issues
         .filter { it.type == IssueType.TIME_OVERLAP }
     if (clashes.isEmpty()) return
-    Surface(color = PrototypeStyle.paleRed, shape = RoundedCornerShape(12.dp)) {
+    Surface(color = PrototypeStyle.paleRed, shape = RoundedCornerShape(14.dp)) {
         Column(Modifier.fillMaxWidth().padding(12.dp).semantics { liveRegion = LiveRegionMode.Assertive }) {
             Text("Timetable clash detected", color = PrototypeStyle.red, style = MaterialTheme.typography.titleMedium)
             clashes.forEach { issue ->

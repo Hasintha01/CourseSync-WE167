@@ -18,6 +18,8 @@ import com.example.coursesync.shared.data.CourseSyncRepository
 import com.example.coursesync.shared.model.*
 import com.example.coursesync.shared.validation.*
 import com.example.coursesync.ui.theme.PrototypeStyle as P
+import com.example.coursesync.ui.theme.readableDay
+import com.example.coursesync.ui.theme.readableTime
 
 internal data class PlanSnapshot(
     val draft: Draft,
@@ -30,15 +32,17 @@ internal data class PlanSnapshot(
 
 internal suspend fun loadPlan(repository: CourseSyncRepository, draftId: String): PlanSnapshot? {
     val pair = repository.reopenDraft(draftId) ?: return null
-    return PlanSnapshot(pair.first, pair.second, repository.courses(), repository.groups(),
-        repository.validateDraft(draftId), repository.registrations(pair.first.studentId).firstOrNull { it.draftId == draftId })
+    val registration = repository.registrations(pair.first.studentId).firstOrNull { it.draftId == draftId }
+    val visibleSelections = if (registration == null) pair.second else repository.registrationSelections(registration.id).map {
+        DraftSelection(draftId, it.courseId, it.groupId)
+    }
+    return PlanSnapshot(pair.first, visibleSelections, repository.courses(), repository.groups(),
+        repository.validateDraft(draftId), registration)
 }
 
 internal fun groupTime(group: ClassGroup?): String {
     if (group == null) return "Group unavailable"
-    val day = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun").getOrElse(group.day - 1) { "Day ${group.day}" }
-    fun clock(minute: Int) = "%02d:%02d".format(minute / 60, minute % 60)
-    return "$day · ${clock(group.startMinute)}–${clock(group.endMinute)}"
+    return "${readableDay(group.day)} · ${readableTime(group.startMinute)}–${readableTime(group.endMinute)}"
 }
 
 @Composable
@@ -87,7 +91,7 @@ internal fun PrimaryAction(text: String, onClick: () -> Unit, enabled: Boolean =
 @Composable
 internal fun InfoBanner(title: String, body: String, positive: Boolean) {
     val foreground = if (positive) P.green else P.red
-    Surface(color = if (positive) P.paleGreen else P.paleRed, shape = RoundedCornerShape(13.dp)) {
+    Surface(color = if (positive) P.paleGreen else P.paleRed, shape = RoundedCornerShape(14.dp)) {
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(if (positive) "✓" else "⚠", color = foreground, fontWeight = FontWeight.Bold, fontSize = 20.sp)
             Column {

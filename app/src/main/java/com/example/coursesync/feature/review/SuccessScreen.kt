@@ -93,7 +93,7 @@ fun SuccessScreen(repository: CourseSyncRepository, registrationId: String, onBa
                 Column(Modifier.fillMaxWidth().padding(20.dp)) {
                     Text("YOU’RE ALL SET", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(13.dp))
-                    Text("${selections.size} modules confirmed", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                    Text("${selections.size} ${if (selections.size == 1) "module" else "modules"} confirmed", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
                 }
             }
             Text("Registered modules", color = P.ink, fontSize = 19.sp, fontWeight = FontWeight.Bold)
