@@ -1,9 +1,12 @@
 package com.example.coursesync.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 /** Colors sampled from the registration prototype; scoped to Member 1 screens. */
 object PrototypeStyle {
+    val pagePadding = 20.dp
+    val sectionSpacing = 16.dp
     val background = Color(0xFFF4F6FB)
     val ink = Color(0xFF192B3B)
     val muted = Color(0xFF53687D)

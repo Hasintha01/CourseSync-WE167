@@ -7,13 +7,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import com.example.coursesync.ui.theme.AppPrimaryButton as Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.example.coursesync.ui.theme.AppOutlinedButton as OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.coursesync.ui.theme.PrototypeStyle
 
 @Composable
 fun RoleSelectionScreen(onStudent: () -> Unit, onStaff: () -> Unit, onReplayOnboarding: () -> Unit, modifier: Modifier = Modifier) {
@@ -35,7 +36,6 @@ fun StudentHomeScreen(
     modifier: Modifier = Modifier
 ) {
     ScreenColumn(modifier) {
-        Text("Student Workspace", style = MaterialTheme.typography.headlineMedium)
         Text("Select an area to explore.")
         Button(onClick = onCourses, modifier = Modifier.fillMaxWidth()) { Text("Student Courses") }
         Button(onClick = onDrafts, modifier = Modifier.fillMaxWidth()) { Text("Drafts") }
@@ -56,8 +56,9 @@ fun PlaceholderScreen(title: String, description: String, modifier: Modifier = M
 @Composable
 private fun ScreenColumn(modifier: Modifier, content: @Composable () -> Unit) {
     Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = PrototypeStyle.pagePadding, vertical = PrototypeStyle.sectionSpacing),
+        verticalArrangement = Arrangement.spacedBy(PrototypeStyle.sectionSpacing),
         content = { content() }
     )
 }

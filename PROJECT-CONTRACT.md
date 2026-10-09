@@ -1,6 +1,6 @@
 # CourseSync shared contract (IT3060 WE_167)
 
-The existing role selector and `CourseSyncApp` routes remain the navigation entry points. Onboarding, review, courses, drafts, and staff screens are implemented. The timetable route remains Member 3's placeholder. No login or remote service is used. Demo identity is `S1` (Asha Perera).
+The existing role selector and `CourseSyncApp` routes remain the navigation entry points. Onboarding, review, courses, drafts, and staff screens are implemented. The timetable route implements Member 3's weekly grid and clash resolution. No login or remote service is used. Demo identity is `S1` (Asha Perera).
 
 ## Ownership and routes
 
@@ -42,4 +42,4 @@ Database version is 1. Future schema changes require a Room migration; destructi
 
 Review reads the selected draft, current catalog, groups, and structured validator issues on entry. Returning from `Correction` reloads review and validation. `Confirm` displays the draft and calls `confirmRegistration` again; the button is disabled while the call runs. `Success` reads the persisted `RegistrationSelection` snapshot by registration ID, including on `AlreadyConfirmed`. The prototype shows credit totals, but the shared `Course` model has no credits field, so Member 1 displays accurate module counts only.
 
-`feature.review.CorrectionScreen` receives the affected draft, course, group, and issue type from review. It can change a group, remove a prerequisite-blocked module, replace a full class, or add a module to an empty draft using repository methods. Course selection and group editing are also available in the implemented Courses screen. Review reloads validation on return. `View my timetable` currently opens Member 3's existing placeholder route; connecting that route to the active draft and confirmed registration snapshot remains pending.
+`feature.review.CorrectionScreen` receives the affected draft, course, group, and issue type from review. It can change a group, remove a prerequisite-blocked module, replace a full class, or add a module to an empty draft using repository methods. Course selection and group editing are also available in the implemented Courses screen. Review reloads validation on return. `View my timetable` opens Member 3's working timetable for the active draft. Confirmed drafts display the frozen registration snapshot with editing disabled.

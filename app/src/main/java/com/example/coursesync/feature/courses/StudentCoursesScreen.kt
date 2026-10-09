@@ -9,16 +9,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import com.example.coursesync.ui.theme.AppPrimaryButton as Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.example.coursesync.ui.theme.AppOutlinedButton as OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,19 +24,25 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.coursesync.feature.timetable.ClashWarning
 import com.example.coursesync.shared.data.CourseSyncDatabase
 import com.example.coursesync.shared.data.CourseSyncRepository
 import com.example.coursesync.shared.model.ClassGroup
 import com.example.coursesync.shared.model.Course
 import com.example.coursesync.shared.model.Draft
 import com.example.coursesync.shared.model.DraftSelection
+import com.example.coursesync.ui.theme.AppCard
+import com.example.coursesync.ui.theme.PrototypeStyle
+import com.example.coursesync.ui.theme.readableDay
 import kotlinx.coroutines.launch
 
 @Composable
 fun StudentCoursesScreen(
     modifier: Modifier = Modifier,
     activeDraftId: String,
-    onDraftChange: (String) -> Unit
+    onDraftChange: (String) -> Unit,
+    onTimetable: () -> Unit = {},
+    onDrafts: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -88,6 +92,11 @@ fun StudentCoursesScreen(
         mutableStateOf("")
     }
     var saveError by remember { mutableStateOf<String?>(null) }
+    var changeError by remember { mutableStateOf<String?>(null) }
+    var attemptedGroupId by remember { mutableStateOf<String?>(null) }
+    var removePending by remember { mutableStateOf<DraftSelection?>(null) }
+    var removeError by remember { mutableStateOf<String?>(null) }
+    var savedCopy by remember { mutableStateOf<Draft?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var remainingSeats by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
@@ -136,7 +145,7 @@ fun StudentCoursesScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+            .padding(horizontal = PrototypeStyle.pagePadding, vertical = PrototypeStyle.sectionSpacing)
     ) {
 
         Text(
@@ -162,7 +171,15 @@ fun StudentCoursesScreen(
             style = MaterialTheme.typography.titleLarge
         )
         if (currentDraft?.id in confirmedDraftIds) Text("Confirmed registration • Read only")
+        else Text("Changes to this active draft save automatically.", color = PrototypeStyle.muted,
+            style = MaterialTheme.typography.bodySmall)
         message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+        savedCopy?.let { copy ->
+            Text("Copy created: ${copy.name}. Your active draft is still ${currentDraft?.name ?: "unchanged"}.",
+                color = PrototypeStyle.ink)
+            TextButton(onClick = { onDraftChange(copy.id); onDrafts() }) { Text("Open in Drafts") }
+        }
+        if (currentDraft?.id !in confirmedDraftIds) ClashWarning(selections, groups, courses, onTimetable)
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -184,7 +201,7 @@ fun StudentCoursesScreen(
                     it.id == selection.groupId
                 }
 
-                Card(
+                AppCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
@@ -206,7 +223,7 @@ fun StudentCoursesScreen(
 
                         if (group != null) {
                             Text(
-                                text = "Day ${group.day}: ${
+                                text = "${readableDay(group.day)}: ${
                                     formatTime(group.startMinute)
                                 } - ${
                                     formatTime(group.endMinute)
@@ -236,18 +253,8 @@ fun StudentCoursesScreen(
                                     val draft = currentDraft
 
                                     if (draft != null) {
-                                        scope.launch {
-
-                                            busy = true
-                                            try {
-                                                repository.removeSelection(draft.id, selection.courseId)
-                                                reloadPlan()
-                                                message = "Module removed from ${draft.name}."
-                                            } catch (exception: Exception) {
-                                                message = exception.message ?: "Could not remove module"
-                                            }
-                                            busy = false
-                                        }
+                                        removeError = null
+                                        removePending = selection
                                     }
                                 }
                             ) {
@@ -270,7 +277,7 @@ fun StudentCoursesScreen(
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Save Draft")
+            Text("Save a copy")
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -286,20 +293,9 @@ fun StudentCoursesScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth().height(420.dp),
-            contentPadding = PaddingValues(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-
-            items(
-                items = courses,
-                key = { it.id }
-            ) { course ->
-
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            courses.forEach { course ->
+                AppCard(modifier = Modifier.fillMaxWidth()) {
 
                     Column(
                         modifier = Modifier.padding(16.dp)
@@ -351,15 +347,13 @@ fun StudentCoursesScreen(
         }
 
         AlertDialog(
-            onDismissRequest = {
-                selectedCourse = null
-            },
+            onDismissRequest = { if (!busy) selectedCourse = null },
             title = {
                 Text("${course.id} - ${course.title}")
             },
             text = {
 
-                Column {
+                Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
 
                     Text(
                         text = if (course.prerequisiteId != null) {
@@ -380,7 +374,7 @@ fun StudentCoursesScreen(
 
                     courseGroups.forEach { group ->
 
-                        Card(
+                        AppCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp)
@@ -395,7 +389,7 @@ fun StudentCoursesScreen(
                                 )
 
                                 Text(
-                                    text = "Day ${group.day}: ${
+                                    text = "${readableDay(group.day)}: ${
                                         formatTime(group.startMinute)
                                     } - ${
                                         formatTime(group.endMinute)
@@ -446,6 +440,7 @@ fun StudentCoursesScreen(
             },
             confirmButton = {
                 TextButton(
+                    enabled = !busy,
                     onClick = {
                         selectedCourse = null
                     }
@@ -468,14 +463,14 @@ fun StudentCoursesScreen(
 
         AlertDialog(
             onDismissRequest = {
-                changeSelection = null
+                if (!busy) { changeSelection = null; changeError = null; attemptedGroupId = null }
             },
             title = {
                 Text("Change Class Group")
             },
             text = {
 
-                Column {
+                Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
 
                     Text(
                         text = "Select another group for ${selection.courseId}"
@@ -488,21 +483,22 @@ fun StudentCoursesScreen(
                         OutlinedButton(
                             enabled = (remainingSeats[group.id] ?: 0) > 0 && !busy,
                             onClick = {
+                                attemptedGroupId = group.id
+                                changeError = null
 
                                 val draft = currentDraft
 
-                                if (draft != null) {
-
+                                if (draft != null && !busy) {
+                                    busy = true
                                     scope.launch {
-
-                                        busy = true
                                         try {
                                             repository.changeSelection(draft.id, selection.courseId, group.id)
                                             reloadPlan()
                                             changeSelection = null
+                                            attemptedGroupId = null
                                             message = "Group changed to ${group.label}."
                                         } catch (exception: Exception) {
-                                            message = exception.message ?: "Could not change group"
+                                            changeError = exception.message ?: "Could not change group"
                                         }
                                         busy = false
                                     }
@@ -512,7 +508,7 @@ fun StudentCoursesScreen(
                         ) {
 
                             Text(
-                                "Group ${group.label} • Day ${group.day} • ${
+                                "${if (busy && attemptedGroupId == group.id) "Changing… " else if (attemptedGroupId == group.id) "Selected • " else ""}Group ${group.label} • ${readableDay(group.day)} • ${
                                     formatTime(group.startMinute)
                                 }-${
                                     formatTime(group.endMinute)
@@ -520,12 +516,16 @@ fun StudentCoursesScreen(
                             )
                         }
                     }
+                    changeError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             },
             confirmButton = {
                 TextButton(
+                    enabled = !busy,
                     onClick = {
                         changeSelection = null
+                        changeError = null
+                        attemptedGroupId = null
                     }
                 ) {
                     Text("Cancel")
@@ -543,10 +543,12 @@ fun StudentCoursesScreen(
         AlertDialog(
             onDismissRequest = { if (!busy) showSaveDialog = false },
             title = {
-                Text("Save Draft")
+                Text("Save a copy")
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Changes to ${currentDraft?.name ?: "your active draft"} are already saved. Name a separate copy; the active draft will stay the same.")
                     OutlinedTextField(
                         value = draftName,
                         onValueChange = { draftName = it; saveError = null },
@@ -572,7 +574,8 @@ fun StudentCoursesScreen(
                                 val saved = repository.saveDraft(studentId, trimmedName, selections)
                                 showSaveDialog = false
                                 draftName = ""
-                                message = "Saved ${saved.name} with ${selections.size} modules."
+                                savedCopy = saved
+                                message = "Saved a copy named ${saved.name} with ${selections.size} ${if (selections.size == 1) "module" else "modules"}."
                             } catch (exception: Exception) {
                                 saveError = exception.message ?: "Could not save draft"
                             }
@@ -594,6 +597,38 @@ fun StudentCoursesScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+    removePending?.let { selection ->
+        val draft = currentDraft
+        val courseName = courses.firstOrNull { it.id == selection.courseId }?.title ?: selection.courseId
+        AlertDialog(
+            onDismissRequest = { if (!busy) { removePending = null; removeError = null } },
+            title = { Text("Remove $courseName?") },
+            text = {
+                Column {
+                    Text("Remove this module from ${draft?.name ?: "the active draft"}? This change saves immediately.")
+                    removeError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !busy && draft != null, onClick = {
+                    if (busy || draft == null) return@TextButton
+                    busy = true
+                    removeError = null
+                    scope.launch {
+                        try {
+                            repository.removeSelection(draft.id, selection.courseId)
+                            reloadPlan()
+                            removePending = null
+                            message = "$courseName removed from ${draft.name}."
+                        } catch (exception: Exception) {
+                            removeError = exception.message ?: "Could not remove module"
+                        } finally { busy = false }
+                    }
+                }) { Text(if (busy) "Removing…" else "Remove") }
+            },
+            dismissButton = { TextButton(enabled = !busy, onClick = { removePending = null; removeError = null }) { Text("Keep module") } }
         )
     }
 }

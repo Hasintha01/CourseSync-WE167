@@ -35,22 +35,25 @@ fun RegistrationReviewScreen(
         loading = false
     }
     val current = plan
+    val confirmed = current?.registration != null
     val empty = current?.selections?.isEmpty() == true
     val issues = current?.validation?.issues.orEmpty()
     val title = when {
+        confirmed -> "Registration already saved"
         empty -> "Start your registration"
         issues.isEmpty() && current != null -> "Ready to register"
         else -> "Review registration"
     }
     val subtitle = when {
+        confirmed -> "These modules are from your confirmed registration and cannot be edited here."
         empty -> "Your module selection is empty."
         issues.isEmpty() && current != null -> "One final look. Everything checks out."
         else -> "Check your modules before confirming."
     }
-    RegistrationScaffold(if (empty) "01 / SELECT" else "02 / REVIEW", title, subtitle, onBack,
+    RegistrationScaffold(if (confirmed) "03 / SAVED" else if (empty) "01 / SELECT" else "02 / REVIEW", title, subtitle, onBack,
         footer = {
             if (current != null && !loading && error == null) {
-                Text("${current.selections.size} modules selected", color = P.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("${current.selections.size} ${if (current.selections.size == 1) "module" else "modules"} ${if (confirmed) "confirmed" else "selected"}", color = P.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
             }
             when {
@@ -90,6 +93,14 @@ fun RegistrationReviewScreen(
             current == null -> {
                 Text("Draft not found. Choose another saved draft or return to the student workspace.", color = P.muted)
                 if (drafts.isEmpty()) TextButton(onClick = { retry++ }) { Text("Retry") }
+            }
+            confirmed -> {
+                InfoBanner("Confirmed registration · Read only", "This is the saved registration snapshot. Open its details to view the registration ID and timetable.", positive = true)
+                Text("Registered modules", color = P.ink, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                current.selections.forEach { selection ->
+                    CourseCard(current.courses.firstOrNull { it.id == selection.courseId },
+                        current.groups.firstOrNull { it.id == selection.groupId })
+                }
             }
             empty -> {
                 Spacer(Modifier.height(25.dp))

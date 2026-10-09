@@ -8,14 +8,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import com.example.coursesync.ui.theme.AppPrimaryButton as Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.example.coursesync.ui.theme.AppOutlinedButton as OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -27,13 +29,21 @@ import com.example.coursesync.shared.data.CourseSyncDatabase
 import com.example.coursesync.shared.data.CourseSyncRepository
 import com.example.coursesync.shared.model.Draft
 import com.example.coursesync.shared.model.DraftSelection
+import com.example.coursesync.shared.model.ClassGroup
+import com.example.coursesync.shared.model.Course
+import com.example.coursesync.ui.theme.AppCard
+import com.example.coursesync.ui.theme.PrototypeStyle
+import com.example.coursesync.ui.theme.readableDay
+import com.example.coursesync.ui.theme.readableTime
 import kotlinx.coroutines.launch
 
 @Composable
 fun DraftsScreen(
     modifier: Modifier = Modifier,
     activeDraftId: String,
-    onDraftChange: (String) -> Unit
+    onDraftChange: (String) -> Unit,
+    onEditCourses: () -> Unit,
+    onViewTimetable: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -52,6 +62,8 @@ fun DraftsScreen(
     var drafts by remember {
         mutableStateOf<List<Draft>>(emptyList())
     }
+    var groups by remember { mutableStateOf<List<ClassGroup>>(emptyList()) }
+    var courses by remember { mutableStateOf<List<Course>>(emptyList()) }
 
     var confirmedDraftIds by remember {
         mutableStateOf<Set<String>>(emptySet())
@@ -83,6 +95,8 @@ fun DraftsScreen(
         scope.launch {
             confirmedDraftIds = repository.registrations(studentId).map { it.draftId }.toSet()
             drafts = repository.drafts(studentId)
+            groups = repository.groups()
+            courses = repository.courses()
         }
     }
 
@@ -93,7 +107,7 @@ fun DraftsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(horizontal = PrototypeStyle.pagePadding, vertical = PrototypeStyle.sectionSpacing)
     ) {
 
         Text(
@@ -132,7 +146,7 @@ fun DraftsScreen(
 
                     val isConfirmed = draft.id in confirmedDraftIds
 
-                    Card(
+                    AppCard(
                         modifier = Modifier.fillMaxWidth()
                     ) {
 
@@ -223,30 +237,30 @@ fun DraftsScreen(
                     Text(draft.name)
                 },
                 text = {
-                    Column {
-
-                        Text(
-                            text = "Selected courses: ${selectedSelections.size}"
-                        )
+                    Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+                        Text("${selectedSelections.size} ${if (selectedSelections.size == 1) "module" else "modules"} selected. This is now the active draft.")
 
                         Spacer(modifier = Modifier.height(12.dp))
 
                         selectedSelections.forEach { selection ->
-
-                            Text(
-                                text = "${selection.courseId} - Group ${selection.groupId}"
-                            )
+                            val group = groups.firstOrNull { it.id == selection.groupId }
+                            val course = courses.firstOrNull { it.id == selection.courseId }
+                            Text("${course?.title ?: selection.courseId} • Group ${group?.label ?: "unavailable"}")
+                            if (group != null) Text("${readableDay(group.day)} ${readableTime(group.startMinute)}–${readableTime(group.endMinute)}")
                         }
                     }
                 },
                 confirmButton = {
-                    TextButton(
-                        onClick = {
-                            selectedDraft = null
-                            selectedSelections = emptyList()
-                        }
-                    ) {
-                        Text("Close")
+                    TextButton(onClick = { selectedDraft = null; selectedSelections = emptyList(); onViewTimetable() }) {
+                        Text("View timetable")
+                    }
+                },
+                dismissButton = {
+                    Column {
+                        if (draft.id !in confirmedDraftIds) TextButton(onClick = {
+                            selectedDraft = null; selectedSelections = emptyList(); onEditCourses()
+                        }) { Text("Edit in Courses") }
+                        TextButton(onClick = { selectedDraft = null; selectedSelections = emptyList() }) { Text("Close") }
                     }
                 }
             )

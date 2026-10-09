@@ -11,11 +11,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import com.example.coursesync.ui.theme.AppPrimaryButton as Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.example.coursesync.ui.theme.AppOutlinedButton as OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,11 +35,15 @@ import com.example.coursesync.shared.model.CaseStatus
 import com.example.coursesync.shared.model.GuidanceNote
 import com.example.coursesync.shared.model.StaffCase
 import com.example.coursesync.shared.model.Student
+import com.example.coursesync.ui.theme.AppCard
+import com.example.coursesync.ui.theme.PrototypeStyle
+import java.text.DateFormat
+import java.util.Date
 import kotlinx.coroutines.launch
 
 /** Member 4's staff workflow, connected to the team's shared repository. */
 @Composable
-fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit) {
+fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit, backRequest: Int = 0) {
     val context = LocalContext.current
     val repository = remember(context) { CourseSyncRepository(CourseSyncDatabase.get(context)) }
     val scope = rememberCoroutineScope()
@@ -49,6 +52,7 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit) {
     var selectedTab by remember { mutableStateOf(StaffTab.CASES) }
     var selectedCase by remember { mutableStateOf<StaffCase?>(null) }
     var selectedStudent by remember { mutableStateOf<Student?>(null) }
+    var returnToCase by remember { mutableStateOf<StaffCase?>(null) }
     var notes by remember { mutableStateOf<List<GuidanceNote>>(emptyList()) }
     var history by remember { mutableStateOf<List<CaseHistory>>(emptyList()) }
     var registrations by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -60,15 +64,17 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var noteSaveError by remember { mutableStateOf<String?>(null) }
+    var statusError by remember { mutableStateOf<String?>(null) }
 
     val goBack: () -> Unit = {
         when {
             selectedCase != null -> selectedCase = null
-            selectedStudent != null -> selectedStudent = null
+            selectedStudent != null -> { selectedStudent = null; selectedCase = returnToCase; returnToCase = null }
             else -> onExit()
         }
     }
     BackHandler(onBack = goBack)
+    LaunchedEffect(backRequest) { if (backRequest > 0) goBack() }
 
     LaunchedEffect(Unit) {
         students = repository.students()
@@ -92,21 +98,23 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit) {
     }
 
     Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = PrototypeStyle.pagePadding, vertical = PrototypeStyle.sectionSpacing),
+        verticalArrangement = Arrangement.spacedBy(PrototypeStyle.sectionSpacing)
     ) {
-        Text("Staff Workspace", style = MaterialTheme.typography.headlineSmall)
         Text("Review student registrations and manage guidance cases.")
         message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-        if (selectedCase == null && selectedStudent == null) {
-            OutlinedButton(onClick = goBack) { Text("Back to workspaces") }
-        }
         when {
             selectedCase != null -> {
                 val staffCase = selectedCase!!
-                OutlinedButton(onClick = goBack) { Text("Back to cases") }
                 Text(staffCase.subject, style = MaterialTheme.typography.titleLarge)
-                Text("${staffCase.id} • Student ${staffCase.studentId}")
+                val caseStudent = students.firstOrNull { it.id == staffCase.studentId }
+                Text("${staffCase.id} • ${caseStudent?.name ?: "Student ${staffCase.studentId}"}")
+                if (caseStudent != null) TextButton(onClick = {
+                    returnToCase = staffCase
+                    selectedCase = null
+                    selectedStudent = caseStudent
+                }) { Text("View student registration") }
                 Text("Status: ${staffCase.status.displayName()}")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = {
@@ -120,7 +128,7 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit) {
                 Text("Guidance notes", style = MaterialTheme.typography.titleMedium)
                 if (notes.isEmpty()) Text("No guidance notes yet.")
                 notes.forEach { note ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    AppCard(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(note.text)
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -138,12 +146,13 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit) {
                 Text("Case history", style = MaterialTheme.typography.titleMedium)
                 if (history.isEmpty()) Text("No status changes yet.")
                 history.forEach { event ->
-                    Text("${event.fromStatus?.displayName() ?: "Created"} → ${event.toStatus.displayName()}")
+                    val timeLabel = if (event.changedAt <= 1L) "Time not recorded" else
+                        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(event.changedAt))
+                    Text("${event.fromStatus?.displayName() ?: "Created"} → ${event.toStatus.displayName()} • $timeLabel")
                 }
             }
             selectedStudent != null -> {
                 val student = selectedStudent!!
-                OutlinedButton(onClick = goBack) { Text("Back to students") }
                 Text(student.name, style = MaterialTheme.typography.titleLarge)
                 Text("Student ID: ${student.id}")
                 Text("Confirmed registration", style = MaterialTheme.typography.titleMedium)
@@ -164,7 +173,7 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit) {
                 if (selectedTab == StaffTab.CASES) {
                     if (cases.isEmpty()) Text("No cases available.")
                     cases.forEach { staffCase ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
+                        AppCard(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(staffCase.subject, style = MaterialTheme.typography.titleMedium)
                                 Text("${staffCase.id} • ${staffCase.status.displayName()}")
@@ -176,11 +185,11 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit) {
                 } else {
                     if (students.isEmpty()) Text("No students available.")
                     students.forEach { student ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
+                        AppCard(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(student.name, style = MaterialTheme.typography.titleMedium)
                                 Text(student.id)
-                                Button(onClick = { selectedStudent = student }) { Text("View registration") }
+                                Button(onClick = { returnToCase = null; selectedStudent = student }) { Text("View registration") }
                             }
                         }
                     }
@@ -249,11 +258,13 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit) {
             title = { Text("Update case status") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    statusError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     CaseStatus.entries.forEach { status ->
                         OutlinedButton(enabled = status != selectedCase?.status && !busy, onClick = {
                             val staffCase = selectedCase!!
+                            statusError = null
+                            busy = true
                             scope.launch {
-                                busy = true
                                 try {
                                     repository.updateCaseStatus(staffCase.id, status)
                                     cases = repository.cases()
@@ -261,10 +272,10 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit) {
                                     history = repository.caseHistory(staffCase.id)
                                     showStatusEditor = false
                                     message = "Case status updated to ${status.displayName()}."
-                                } catch (exception: Exception) { message = exception.message ?: "Could not update status" }
+                                } catch (exception: Exception) { statusError = exception.message ?: "Could not update status" }
                                 busy = false
                             }
-                        }, modifier = Modifier.fillMaxWidth()) { Text(status.displayName()) }
+                        }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Updating…" else status.displayName()) }
                     }
                 }
             },
@@ -274,4 +285,4 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit) {
 }
 
 private enum class StaffTab(val label: String) { CASES("Cases"), STUDENTS("Students") }
-private fun CaseStatus.displayName(): String = name.lowercase().replace('_', ' ')
+private fun CaseStatus.displayName(): String = name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
