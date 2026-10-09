@@ -16,7 +16,8 @@ import com.example.coursesync.ui.theme.PrototypeStyle as P
 fun RegistrationReviewScreen(
     repository: CourseSyncRepository, draftId: String, onDraftChange: (String) -> Unit,
     onBack: () -> Unit, onCorrect: (ValidationIssue, String?, String?) -> Unit,
-    onConfirm: () -> Unit, onSuccess: (String) -> Unit, onBrowse: () -> Unit
+    onConfirm: () -> Unit, onSuccess: (String) -> Unit, onBrowse: () -> Unit,
+    onStartNew: (String) -> Unit
 ) {
     var plan by remember(draftId) { mutableStateOf<PlanSnapshot?>(null) }
     var drafts by remember { mutableStateOf<List<Draft>>(emptyList()) }
@@ -69,6 +70,9 @@ fun RegistrationReviewScreen(
                     onCorrect(issue, selection?.courseId, selection?.groupId)
                 })
                 else -> PrimaryAction("Continue to confirmation", onConfirm, enabled = current.validation.isValid)
+            }
+            current?.takeIf { confirmed }?.let {
+                NewRegistrationAction(repository, it.draft.studentId, onStartNew)
             }
         }) {
         Box {

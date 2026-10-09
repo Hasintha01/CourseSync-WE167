@@ -21,7 +21,8 @@ import com.example.coursesync.ui.theme.PrototypeStyle as P
 private enum class RegistrationLoadState { LOADING, FOUND, MISSING, FAILED }
 
 @Composable
-fun SuccessScreen(repository: CourseSyncRepository, registrationId: String, onBack: () -> Unit, onTimetable: () -> Unit) {
+fun SuccessScreen(repository: CourseSyncRepository, registrationId: String, onBack: () -> Unit,
+                  onTimetable: () -> Unit, onStartNew: (String) -> Unit) {
     var registration by remember(registrationId) { mutableStateOf<Registration?>(null) }
     var selections by remember(registrationId) { mutableStateOf<List<RegistrationSelection>>(emptyList()) }
     var courses by remember { mutableStateOf<List<Course>>(emptyList()) }
@@ -69,6 +70,7 @@ fun SuccessScreen(repository: CourseSyncRepository, registrationId: String, onBa
                     Text("Registration saved · ${registration?.studentId}", color = P.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
                     PrimaryAction("View my timetable", onTimetable, enabled = !registration?.id.isNullOrBlank())
+                    registration?.let { NewRegistrationAction(repository, it.studentId, onStartNew) }
                 }
                 RegistrationLoadState.MISSING -> PrimaryAction("Return to student workspace", onBack)
                 RegistrationLoadState.FAILED -> PrimaryAction("Retry loading registration", { retry++ })

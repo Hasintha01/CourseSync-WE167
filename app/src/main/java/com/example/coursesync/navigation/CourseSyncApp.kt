@@ -68,6 +68,12 @@ fun CourseSyncApp() {
         timetableReturnRoute = from.name
         routeName = Route.Timetable.name
     }
+    val openNewDraft: (String) -> Unit = { newDraftId ->
+        draftId = newDraftId
+        preferences.edit().putString("active_draft", newDraftId).apply()
+        coursesReturnRoute = Route.StudentHome.name
+        routeName = Route.Courses.name
+    }
     val goBack = {
         routeName = when (route) {
             Route.Correction, Route.Confirm -> Route.Review.name
@@ -102,14 +108,14 @@ fun CourseSyncApp() {
                 affectedCourseId = null
                 affectedGroupId = null
                 routeName = Route.Correction.name
-            })
+            }, onStartNew = openNewDraft)
         Route.Correction -> CorrectionScreen(repository, draftId, IssueType.valueOf(correctionType),
             affectedCourseId, affectedGroupId, onBack = goBack, onApplied = { routeName = Route.Review.name })
         Route.Confirm -> ConfirmationScreen(repository, draftId, onBack = goBack,
             onInvalid = { routeName = Route.Review.name },
             onSuccess = { registrationId = it; routeName = Route.Success.name })
         Route.Success -> SuccessScreen(repository, registrationId, onBack = goBack,
-            onTimetable = { openTimetable(Route.Success) })
+            onTimetable = { openTimetable(Route.Success) }, onStartNew = openNewDraft)
         else -> Scaffold(modifier = Modifier.fillMaxSize(), topBar = {
             TopAppBar(title = {
                 if (route == Route.Roles) CourseSyncWordmark(22.sp) else Text(route.title)
