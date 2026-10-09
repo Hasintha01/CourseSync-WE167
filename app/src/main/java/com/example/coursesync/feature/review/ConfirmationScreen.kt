@@ -14,6 +14,7 @@ import com.example.coursesync.shared.data.ConfirmationResult
 import com.example.coursesync.shared.data.CourseSyncRepository
 import com.example.coursesync.ui.theme.PrototypeStyle as P
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 @Composable
 fun ConfirmationScreen(repository: CourseSyncRepository, draftId: String, onBack: () -> Unit,
@@ -21,8 +22,16 @@ fun ConfirmationScreen(repository: CourseSyncRepository, draftId: String, onBack
     var plan by remember(draftId) { mutableStateOf<PlanSnapshot?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var retry by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(draftId) { plan = loadPlan(repository, draftId) }
+    LaunchedEffect(draftId, retry) {
+        plan = null
+        loadError = null
+        try { plan = loadPlan(repository, draftId)
+        } catch (cancelled: CancellationException) { throw cancelled
+        } catch (exception: Exception) { loadError = exception.message ?: "Could not load the registration plan." }
+    }
     val current = plan
     RegistrationScaffold("03 / CONFIRM", "Confirm registration", "You’re about to register for these modules.", onBack,
         footer = {
@@ -44,7 +53,10 @@ fun ConfirmationScreen(repository: CourseSyncRepository, draftId: String, onBack
                 }
             }, enabled = !busy && current != null && current.validation.isValid)
         }) {
-        if (current == null) {
+        if (loadError != null) {
+            Text(loadError ?: "Could not load the registration plan.", color = P.red)
+            TextButton(onClick = { retry++ }) { Text("Retry loading") }
+        } else if (current == null) {
             CircularProgressIndicator(color = P.blue)
         } else {
             if (!current.validation.isValid) {

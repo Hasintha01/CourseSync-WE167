@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import com.example.coursesync.ui.theme.AppPrimaryButton as Button
 import androidx.compose.material3.MaterialTheme
 import com.example.coursesync.ui.theme.AppOutlinedButton as OutlinedButton
@@ -36,6 +37,7 @@ import com.example.coursesync.ui.theme.PrototypeStyle
 import com.example.coursesync.ui.theme.readableDay
 import com.example.coursesync.ui.theme.readableTime
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 @Composable
 fun DraftsScreen(
@@ -90,13 +92,23 @@ fun DraftsScreen(
     }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
 
     fun loadDrafts() {
         scope.launch {
-            confirmedDraftIds = repository.registrations(studentId).map { it.draftId }.toSet()
-            drafts = repository.drafts(studentId)
-            groups = repository.groups()
-            courses = repository.courses()
+            loading = true
+            loadError = null
+            try {
+                confirmedDraftIds = repository.registrations(studentId).map { it.draftId }.toSet()
+                drafts = repository.drafts(studentId)
+                groups = repository.groups()
+                courses = repository.courses()
+            } catch (cancelled: CancellationException) { throw cancelled
+            } catch (exception: Exception) {
+                loadError = exception.message ?: "Could not load saved drafts."
+            }
+            loading = false
         }
     }
 
@@ -125,7 +137,12 @@ fun DraftsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (drafts.isEmpty()) {
+        if (loading) {
+            CircularProgressIndicator()
+        } else if (loadError != null) {
+            Text(loadError ?: "Could not load saved drafts.", color = MaterialTheme.colorScheme.error)
+            Button(onClick = { loadDrafts() }) { Text("Retry loading") }
+        } else if (drafts.isEmpty()) {
 
             Text(
                 text = "No saved drafts found.",
@@ -181,14 +198,19 @@ fun DraftsScreen(
                                     enabled = !busy,
                                     onClick = {
                                         scope.launch {
-                                            val result =
-                                                repository.reopenDraft(draft.id)
-
-                                            if (result != null) {
-                                                selectedDraft = result.first
-                                                selectedSelections = result.second
-                                                onDraftChange(draft.id)
+                                            busy = true
+                                            try {
+                                                val result = repository.reopenDraft(draft.id)
+                                                if (result != null) {
+                                                    selectedDraft = result.first
+                                                    selectedSelections = result.second
+                                                    onDraftChange(draft.id)
+                                                } else message = "This draft is no longer available. Reload the list."
+                                            } catch (cancelled: CancellationException) { throw cancelled
+                                            } catch (exception: Exception) {
+                                                message = exception.message ?: "Could not open draft."
                                             }
+                                            busy = false
                                         }
                                     }
                                 ) {

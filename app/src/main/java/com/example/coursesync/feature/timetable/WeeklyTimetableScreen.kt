@@ -44,6 +44,8 @@ fun WeeklyTimetableScreen(
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var loadFailed by remember { mutableStateOf(false) }
+    var retry by remember { mutableIntStateOf(0) }
     var message by remember(activeDraftId) { mutableStateOf<String?>(null) }
     var editingId by rememberSaveable(activeDraftId) { mutableStateOf<String?>(null) }
     var removingId by rememberSaveable(activeDraftId) { mutableStateOf<String?>(null) }
@@ -81,11 +83,12 @@ fun WeeklyTimetableScreen(
             } finally { busy = false }
         }
     }
-    LaunchedEffect(activeDraftId) {
+    LaunchedEffect(activeDraftId, retry) {
         loading = true
+        loadFailed = false
         try { refresh(); error = null
         } catch (cancelled: CancellationException) { throw cancelled
-        } catch (exception: Exception) { error = exception.message ?: "Could not load your timetable."
+        } catch (exception: Exception) { error = exception.message ?: "Could not load your timetable."; loadFailed = true
         } finally { loading = false }
     }
 
@@ -98,8 +101,11 @@ fun WeeklyTimetableScreen(
         Text("${draft?.name ?: "No active draft"} • Offline demonstration", color = Style.muted)
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let { Notice(it, true) }
+        if (loadFailed) Button(onClick = { retry++ }) { Text("Retry loading") }
         message?.let { Notice(it, false) }
-        if (!loading && draft == null) {
+        if (!loading && loadFailed) {
+            Text("Timetable data could not be loaded. Try again to see the current plan.")
+        } else if (!loading && draft == null) {
             Text("This draft is no longer available. Open a saved draft to see your week.")
             Button(onClick = onDrafts) { Text("Open saved drafts") }
         } else if (!loading) {
@@ -172,7 +178,7 @@ fun WeeklyTimetableScreen(
             onDismissRequest = { if (!busy) editingId = null },
             title = { Text("Change $courseId group") },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Choose a group. Changes are saved to this draft immediately.")
                     groups.filter { it.courseId == courseId }.forEach { candidate ->
                         val proposed = selections.map { if (it.courseId == courseId) it.copy(groupId = candidate.id) else it }

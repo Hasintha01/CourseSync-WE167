@@ -17,8 +17,9 @@ import com.example.coursesync.shared.model.ClassGroup
 import com.example.coursesync.shared.validation.IssueType
 import com.example.coursesync.ui.theme.PrototypeStyle as P
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
-/** Temporary Member 1 correction view until the course/timetable owners provide their editor. */
+/** Registration correction view backed by the shared draft repository. */
 @Composable
 fun CorrectionScreen(
     repository: CourseSyncRepository, draftId: String, issueType: IssueType,
@@ -28,11 +29,18 @@ fun CorrectionScreen(
     var chosenGroupId by remember(draftId, issueType) { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var retry by remember { mutableIntStateOf(0) }
     var remainingSeats by remember(draftId) { mutableStateOf<Map<String, Int>>(emptyMap()) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(draftId) {
-        plan = loadPlan(repository, draftId)
-        remainingSeats = repository.remainingSeats(plan?.groups.orEmpty())
+    LaunchedEffect(draftId, retry) {
+        plan = null
+        loadError = null
+        try {
+            plan = loadPlan(repository, draftId)
+            remainingSeats = repository.remainingSeats(plan?.groups.orEmpty())
+        } catch (cancelled: CancellationException) { throw cancelled
+        } catch (exception: Exception) { loadError = exception.message ?: "Could not load this draft." }
     }
     val current = plan
     val selected = current?.selections?.firstOrNull { it.courseId == affectedCourseId || it.groupId == affectedGroupId }
@@ -90,7 +98,10 @@ fun CorrectionScreen(
         }, enabled = !busy && current != null && (issueType == IssueType.MISSING_PREREQUISITE ||
             (chosenGroupId != null && (remainingSeats[chosenGroupId] ?: 0) > 0)))
     }) {
-        if (current == null) {
+        if (loadError != null) {
+            Text(loadError ?: "Could not load this draft.", color = P.red)
+            TextButton(onClick = { retry++ }) { Text("Retry loading") }
+        } else if (current == null) {
             CircularProgressIndicator(color = P.blue)
         } else {
             selected?.let { selection ->

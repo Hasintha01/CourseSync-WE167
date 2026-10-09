@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import com.example.coursesync.ui.theme.AppPrimaryButton as Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +23,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -40,6 +43,9 @@ import com.example.coursesync.ui.theme.PrototypeStyle
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import com.example.coursesync.ui.theme.readableDay
+import com.example.coursesync.ui.theme.readableTime
 
 /** Member 4's staff workflow, connected to the team's shared repository. */
 @Composable
@@ -65,6 +71,9 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit, back
     var message by remember { mutableStateOf<String?>(null) }
     var noteSaveError by remember { mutableStateOf<String?>(null) }
     var statusError by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var retry by remember { mutableIntStateOf(0) }
 
     val goBack: () -> Unit = {
         when {
@@ -76,24 +85,45 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit, back
     BackHandler(onBack = goBack)
     LaunchedEffect(backRequest) { if (backRequest > 0) goBack() }
 
-    LaunchedEffect(Unit) {
-        students = repository.students()
-        cases = repository.cases()
+    LaunchedEffect(retry) {
+        loading = true
+        loadError = null
+        try {
+            students = repository.students()
+            cases = repository.cases()
+        } catch (cancelled: CancellationException) { throw cancelled
+        } catch (exception: Exception) { loadError = exception.message ?: "Could not load staff workspace." }
+        loading = false
     }
-    LaunchedEffect(selectedCase?.id) {
+    LaunchedEffect(selectedCase?.id, retry) {
         selectedCase?.let {
-            notes = repository.notes(it.id)
-            history = repository.caseHistory(it.id)
+            loading = true
+            loadError = null
+            try {
+                notes = repository.notes(it.id)
+                history = repository.caseHistory(it.id)
+            } catch (cancelled: CancellationException) { throw cancelled
+            } catch (exception: Exception) { loadError = exception.message ?: "Could not load case details." }
+            loading = false
         }
     }
-    LaunchedEffect(selectedStudent?.id) {
+    LaunchedEffect(selectedStudent?.id, retry) {
         selectedStudent?.let { student ->
-            val courses = repository.courses().associateBy { it.id }
-            registrations = repository.registrations(student.id).flatMap { registration ->
-                repository.registrationSelections(registration.id).map { selection ->
-                    "${courses[selection.courseId]?.title ?: selection.courseId} • ${selection.groupId}"
+            loading = true
+            loadError = null
+            try {
+                val courses = repository.courses().associateBy { it.id }
+                val groups = repository.groups().associateBy { it.id }
+                registrations = repository.registrations(student.id).flatMap { registration ->
+                    repository.registrationSelections(registration.id).map { selection ->
+                        val group = groups[selection.groupId]
+                        "${courses[selection.courseId]?.title ?: selection.courseId} • Group ${group?.label ?: "unavailable"}" +
+                            (if (group != null) " • ${readableDay(group.day)} ${readableTime(group.startMinute)}–${readableTime(group.endMinute)}" else "")
+                    }
                 }
-            }
+            } catch (cancelled: CancellationException) { throw cancelled
+            } catch (exception: Exception) { loadError = exception.message ?: "Could not load student registration." }
+            loading = false
         }
     }
 
@@ -104,6 +134,15 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit, back
     ) {
         Text("Review student registrations and manage guidance cases.")
         message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+        if (loading) {
+            CircularProgressIndicator()
+            return@Column
+        }
+        loadError?.let { failure ->
+            Text(failure, color = MaterialTheme.colorScheme.error)
+            Button(onClick = { retry++ }) { Text("Retry loading") }
+            return@Column
+        }
         when {
             selectedCase != null -> {
                 val staffCase = selectedCase!!
@@ -203,7 +242,8 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit, back
             onDismissRequest = { if (!busy) showNoteEditor = false },
             title = { Text(if (editingNote == null) "Add guidance note" else "Edit guidance note") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(noteText, { noteText = it; noteSaveError = null },
                         label = { Text("Guidance") }, minLines = 3, modifier = Modifier.fillMaxWidth())
                     noteSaveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -257,7 +297,8 @@ fun StaffWorkspaceScreen(modifier: Modifier = Modifier, onExit: () -> Unit, back
             onDismissRequest = { showStatusEditor = false },
             title = { Text("Update case status") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     statusError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     CaseStatus.entries.forEach { status ->
                         OutlinedButton(enabled = status != selectedCase?.status && !busy, onClick = {

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import com.example.coursesync.ui.theme.AppPrimaryButton as Button
 import androidx.compose.material3.MaterialTheme
 import com.example.coursesync.ui.theme.AppOutlinedButton as OutlinedButton
@@ -35,6 +36,7 @@ import com.example.coursesync.ui.theme.AppCard
 import com.example.coursesync.ui.theme.PrototypeStyle
 import com.example.coursesync.ui.theme.readableDay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 @Composable
 fun StudentCoursesScreen(
@@ -100,6 +102,9 @@ fun StudentCoursesScreen(
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var remainingSeats by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    var loading by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var retry by remember { mutableIntStateOf(0) }
 
     suspend fun refresh() {
         confirmedDraftIds = repository.registrations(studentId).map { it.draftId }.toSet()
@@ -111,7 +116,14 @@ fun StudentCoursesScreen(
         selections = pair?.second.orEmpty()
     }
 
-    LaunchedEffect(activeDraftId) { refresh() }
+    LaunchedEffect(activeDraftId, retry) {
+        loading = true
+        loadError = null
+        try { refresh() }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (exception: Exception) { loadError = exception.message ?: "Could not load courses and draft." }
+        loading = false
+    }
 
     fun reloadPlan() {
         scope.launch {
@@ -174,10 +186,19 @@ fun StudentCoursesScreen(
         else Text("Changes to this active draft save automatically.", color = PrototypeStyle.muted,
             style = MaterialTheme.typography.bodySmall)
         message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+        if (loading) {
+            CircularProgressIndicator()
+            return@Column
+        }
+        loadError?.let { failure ->
+            Text(failure, color = MaterialTheme.colorScheme.error)
+            Button(onClick = { retry++ }) { Text("Retry loading") }
+            return@Column
+        }
         savedCopy?.let { copy ->
             Text("Copy created: ${copy.name}. Your active draft is still ${currentDraft?.name ?: "unchanged"}.",
                 color = PrototypeStyle.ink)
-            TextButton(onClick = { onDraftChange(copy.id); onDrafts() }) { Text("Open in Drafts") }
+            TextButton(onClick = onDrafts) { Text("Find copy in Drafts") }
         }
         if (currentDraft?.id !in confirmedDraftIds) ClashWarning(selections, groups, courses, onTimetable)
 
