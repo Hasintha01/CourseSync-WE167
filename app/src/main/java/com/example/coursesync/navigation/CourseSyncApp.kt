@@ -2,6 +2,7 @@ package com.example.coursesync.navigation
 
 import android.content.Context
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -18,6 +19,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.coursesync.feature.courses.DraftsScreen
 import com.example.coursesync.feature.courses.StudentCoursesScreen
 import com.example.coursesync.feature.onboarding.OnboardingScreen
@@ -32,6 +35,8 @@ import com.example.coursesync.shared.data.CourseSyncRepository
 import com.example.coursesync.shared.validation.IssueType
 import com.example.coursesync.ui.home.RoleSelectionScreen
 import com.example.coursesync.ui.home.StudentHomeScreen
+import com.example.coursesync.ui.theme.CourseSyncLogo
+import com.example.coursesync.ui.theme.CourseSyncWordmark
 
 private enum class Route(val title: String) {
     Onboarding("Welcome"), Roles("CourseSync"), StudentHome("Student Workspace"),
@@ -106,9 +111,13 @@ fun CourseSyncApp() {
         Route.Success -> SuccessScreen(repository, registrationId, onBack = goBack,
             onTimetable = { openTimetable(Route.Success) })
         else -> Scaffold(modifier = Modifier.fillMaxSize(), topBar = {
-            TopAppBar(title = { Text(route.title) }, navigationIcon = {
+            TopAppBar(title = {
+                if (route == Route.Roles) CourseSyncWordmark(22.sp) else Text(route.title)
+            }, navigationIcon = {
                 if (route == Route.Staff) TextButton(onClick = { staffBackRequest++ }) { Text("Back") }
                 else if (route != Route.Roles) TextButton(onClick = goBack) { Text("Back") }
+            }, actions = {
+                Box(Modifier.padding(end = 16.dp)) { CourseSyncLogo(32.dp, decorative = true) }
             })
         }) { padding ->
             val contentModifier = Modifier.padding(padding)

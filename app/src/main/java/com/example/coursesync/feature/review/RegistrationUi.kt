@@ -18,6 +18,8 @@ import com.example.coursesync.shared.data.CourseSyncRepository
 import com.example.coursesync.shared.model.*
 import com.example.coursesync.shared.validation.*
 import com.example.coursesync.ui.theme.PrototypeStyle as P
+import com.example.coursesync.ui.theme.CourseSyncLogo
+import com.example.coursesync.ui.theme.CourseSyncWordmark
 import com.example.coursesync.ui.theme.readableDay
 import com.example.coursesync.ui.theme.readableTime
 
@@ -54,11 +56,9 @@ internal fun RegistrationScaffold(
         Row(Modifier.fillMaxWidth().height(58.dp).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) { Text("‹ Back", color = P.ink) }
             Spacer(Modifier.weight(1f))
-            Text("CourseSync", color = P.ink, fontWeight = FontWeight.Bold)
+            CourseSyncWordmark(18.sp)
             Spacer(Modifier.weight(1f))
-            Box(Modifier.size(30.dp).background(P.blue, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                Text("↻", color = Color.White, fontWeight = FontWeight.Bold)
-            }
+            CourseSyncLogo(30.dp, decorative = true)
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(step, color = P.blue, fontSize = 13.sp, fontWeight = FontWeight.Bold)

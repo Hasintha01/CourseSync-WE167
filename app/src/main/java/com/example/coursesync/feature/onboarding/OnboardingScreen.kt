@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.coursesync.ui.theme.CourseSyncBrand
 import com.example.coursesync.ui.theme.PrototypeStyle as P
 
 private data class Slide(val eyebrow: String, val title: String, val description: String)
@@ -44,7 +45,8 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                 if (step < 3) TextButton(onClick = onComplete) { Text("Skip", color = P.blue) }
                 else Spacer(Modifier.width(72.dp))
             }
-            Brand(Modifier.align(Alignment.CenterHorizontally).padding(bottom = 28.dp))
+            CourseSyncBrand(48.dp, 24.sp, 11.sp,
+                Modifier.align(Alignment.CenterHorizontally).padding(bottom = 28.dp))
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
                 Hero(step)
                 Spacer(Modifier.height(28.dp))
@@ -60,7 +62,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
             }
         } else {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.Center) {
-                Brand(Modifier.align(Alignment.CenterHorizontally))
+                CourseSyncBrand(64.dp, 32.sp, 14.sp, Modifier.align(Alignment.CenterHorizontally))
                 Spacer(Modifier.height(56.dp))
                 Text("ONBOARDING COMPLETE", modifier = Modifier.background(P.lime, RoundedCornerShape(10.dp)).padding(12.dp),
                     color = P.ink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -88,20 +90,6 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                 shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = P.blue)) {
                 Text("Choose workspace")
             }
-        }
-    }
-}
-
-@Composable
-private fun Brand(modifier: Modifier = Modifier) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(31.dp).background(P.blue, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-            Text("↻", color = androidx.compose.ui.graphics.Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.width(9.dp))
-        Column {
-            Text("CourseSync", color = P.ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Text("Plan clearly. Register confidently.", color = P.muted, fontSize = 8.sp)
         }
     }
 }
